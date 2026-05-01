@@ -35,6 +35,21 @@ def _find_last_ai_message(messages: list[BaseMessage]) -> AIMessage | None:
     return None
 
 
+def _chunk_text(chunk: Any) -> str:
+    content = getattr(chunk, "content", chunk)
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                parts.append(str(item.get("text", "")))
+            else:
+                parts.append(str(item))
+        return "".join(parts)
+    return str(content)
+
+
 def _print_banner(session_id: str) -> None:
     print("nom-chatbot CLI")
     print(f"session: {session_id}")
@@ -59,13 +74,35 @@ async def _stream_turn(
 ) -> dict[str, Any]:
     latest_state: dict[str, Any] = {}
     current_status: str | None = "idle"
+    printed_answer = False
 
-    async for state in graph.astream(turn_input, config=config, stream_mode="values"):
-        latest_state = dict(state or {})
-        next_status = latest_state.get("agent_status")
-        if next_status and next_status != current_status:
-            print(f"STATUS: {next_status}")
-            current_status = next_status
+    async for event in graph.astream_events(turn_input, config=config, version="v2"):
+        event_name = event.get("event")
+        event_data = event.get("data") or {}
+
+        if event_name == "on_chat_model_stream":
+            chunk = event_data.get("chunk")
+            text = _chunk_text(chunk)
+            if text:
+                if not printed_answer:
+                    print("BOT: ", end="", flush=True)
+                    printed_answer = True
+                print(text, end="", flush=True)
+
+        if event_name in {"on_chain_end", "on_tool_end"}:
+            output = event_data.get("output")
+            if isinstance(output, dict):
+                latest_state = dict(output or {})
+                next_status = latest_state.get("agent_status")
+                if next_status and next_status != current_status:
+                    if printed_answer:
+                        print()
+                        printed_answer = False
+                    print(f"STATUS: {next_status}")
+                    current_status = next_status
+
+    if printed_answer:
+        print()
 
     if current_status != "idle":
         print("STATUS: idle")
@@ -124,8 +161,6 @@ async def run_cli(session_id: str | None = None) -> None:
                 }
                 result = await _stream_turn(graph, turn_input, config)
                 messages = list(result.get("messages", []))
-                last_ai = _find_last_ai_message(messages)
-                print(f"BOT: {_message_text(last_ai) if last_ai else ''}")
     except Exception as exc:  # pragma: no cover - runtime guard for CLI startup
         print(f"Failed to start the chat agent: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc

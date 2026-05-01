@@ -57,6 +57,31 @@ def _latest_ai_message(messages: list[BaseMessage]) -> AIMessage | None:
     return None
 
 
+def _chunk_to_ai_message(chunk: Any) -> AIMessage:
+    return AIMessage(
+        content=getattr(chunk, "content", None),
+        additional_kwargs=dict(getattr(chunk, "additional_kwargs", {}) or {}),
+        response_metadata=dict(getattr(chunk, "response_metadata", {}) or {}),
+        tool_calls=list(getattr(chunk, "tool_calls", []) or []),
+        id=getattr(chunk, "id", None),
+    )
+
+
+def _chunk_text(chunk: Any) -> str:
+    content = getattr(chunk, "content", chunk)
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        parts: list[str] = []
+        for item in content:
+            if isinstance(item, dict) and item.get("type") == "text":
+                parts.append(str(item.get("text", "")))
+            else:
+                parts.append(str(item))
+        return "".join(parts)
+    return str(content)
+
+
 async def _extract_user_name(text: str) -> str | None:
     extractor = get_chat_model().with_structured_output(
         NameExtraction, method="json_schema"
@@ -99,7 +124,27 @@ async def agent_node(state: AgentState) -> dict[str, Any]:
 
     llm = get_chat_model().bind_tools(list(TOOL_MAP.values()))
     prompt = build_agent_system_prompt(user_name)
-    response = await llm.ainvoke([SystemMessage(content=prompt)] + messages)
+    streamed_response = None
+    printed_answer = False
+
+    async for chunk in llm.astream([SystemMessage(content=prompt)] + messages):
+        streamed_response = (
+            chunk if streamed_response is None else streamed_response + chunk
+        )
+        text = _chunk_text(chunk)
+        if text:
+            if not printed_answer:
+                print("BOT: ", end="", flush=True)
+                printed_answer = True
+            print(text, end="", flush=True)
+
+    if printed_answer:
+        print()
+
+    if streamed_response is None:
+        response = await llm.ainvoke([SystemMessage(content=prompt)] + messages)
+    else:
+        response = _chunk_to_ai_message(streamed_response)
 
     result: dict[str, Any] = {
         "messages": [response],
