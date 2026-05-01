@@ -9,6 +9,12 @@ from uuid import uuid4
 from langchain_core.messages import AIMessage, BaseMessage, HumanMessage
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
 
+from rich.console import Console
+from rich.live import Live
+from rich.panel import Panel
+from rich.text import Text
+from rich.markdown import Markdown
+
 from agent.graph import build_graph
 from config import get_settings
 
@@ -50,62 +56,93 @@ def _chunk_text(chunk: Any) -> str:
     return str(content)
 
 
-def _print_banner(session_id: str) -> None:
-    print("nom-chatbot CLI")
-    print(f"session: {session_id}")
-    print("commands: /history, /new, /exit, /quit")
-    print()
+def _print_banner(session_id: str, console: Console) -> None:
+    console.print("[bold green]nom-chatbot CLI[/]")
+    console.print(f"session: [cyan]{session_id}[/]")
+    console.print(
+        "commands: [yellow]/history[/], [yellow]/new[/], [yellow]/exit[/], [yellow]/quit[/]"
+    )
+    console.print()
 
 
-def _print_history(messages: list[BaseMessage]) -> None:
+def _print_history(messages: list[BaseMessage], console: Console) -> None:
     if not messages:
-        print("No messages yet.")
+        console.print("No messages yet.")
         return
 
     for message in messages:
         role = "BOT" if isinstance(message, AIMessage) else "YOU"
-        print(f"{role}: {_message_text(message)}")
+        console.print(f"[bold]{role}:[/] {_message_text(message)}")
 
 
 async def _stream_turn(
     graph: Any,
     turn_input: dict[str, Any],
     config: dict[str, Any],
+    console: Console,
 ) -> dict[str, Any]:
     latest_state: dict[str, Any] = {}
     current_status: str | None = "idle"
-    printed_answer = False
 
-    async for event in graph.astream_events(turn_input, config=config, version="v2"):
-        event_name = event.get("event")
-        event_data = event.get("data") or {}
+    assistant_text = Text()
+    status = "idle"
 
-        if event_name == "on_chat_model_stream":
-            chunk = event_data.get("chunk")
-            text = _chunk_text(chunk)
-            if text:
-                if not printed_answer:
-                    print("BOT: ", end="", flush=True)
-                    printed_answer = True
-                print(text, end="", flush=True)
+    panel = Panel(assistant_text, title=f"STATUS: {status}")
 
-        if event_name in {"on_chain_end", "on_tool_end"}:
-            output = event_data.get("output")
-            if isinstance(output, dict):
-                latest_state = dict(output or {})
-                next_status = latest_state.get("agent_status")
-                if next_status and next_status != current_status:
-                    if printed_answer:
-                        print()
-                        printed_answer = False
-                    print(f"STATUS: {next_status}")
-                    current_status = next_status
+    with Live(panel, console=console, refresh_per_second=10) as live:
+        final_ai_text: str | None = None
+        final_tool_calls: list[tuple[str, Any]] = []
 
-    if printed_answer:
-        print()
+        async for event in graph.astream_events(
+            turn_input, config=config, version="v2"
+        ):
+            event_name = event.get("event")
+            event_data = event.get("data") or {}
+
+            # Streamed text chunks from the chat model or chain
+            if event_name in ("on_chat_model_stream", "on_chain_stream"):
+                chunk = event_data.get("chunk")
+                text = _chunk_text(chunk)
+                if text:
+                    assistant_text.append(text)
+                    live.update(Panel(assistant_text, title=f"STATUS: {status}"))
+
+            # End of chain/tool: capture final state and any tool call summaries
+            if event_name in {"on_chain_end", "on_tool_end"}:
+                output = event_data.get("output")
+                if isinstance(output, dict):
+                    latest_state = dict(output or {})
+                    # collect final AI message text if present
+                    messages = latest_state.get("messages") or []
+                    last_ai = None
+                    for m in messages:
+                        if isinstance(m, AIMessage):
+                            last_ai = m
+                            if getattr(m, "tool_calls", None):
+                                for call in m.tool_calls:
+                                    final_tool_calls.append(
+                                        (call.get("name", ""), call.get("args", {}))
+                                    )
+
+                    if last_ai:
+                        final_ai_text = _message_text(last_ai)
+
+                    next_status = latest_state.get("agent_status")
+                    if next_status and next_status != current_status:
+                        status = next_status
+                        current_status = next_status
+                        live.update(Panel(assistant_text, title=f"STATUS: {status}"))
+
+    # After streaming finishes, print concise tool-call info and final AI message
+    if final_tool_calls:
+        for name, args in final_tool_calls:
+            console.print(f"[yellow]TOOL:[/] {name} {args}")
+
+    if final_ai_text:
+        console.print(Markdown(final_ai_text))
 
     if current_status != "idle":
-        print("STATUS: idle")
+        console.print(f"[green]STATUS:[/] idle")
 
     return latest_state
 
@@ -126,7 +163,8 @@ async def run_cli(session_id: str | None = None) -> None:
             graph = build_graph(checkpointer)
             config = {"configurable": {"thread_id": active_session_id}}
 
-            _print_banner(active_session_id)
+            console = Console()
+            _print_banner(active_session_id, console)
 
             while True:
                 try:
@@ -145,13 +183,13 @@ async def run_cli(session_id: str | None = None) -> None:
                 if command == "/new":
                     active_session_id = uuid4().hex
                     config = {"configurable": {"thread_id": active_session_id}}
-                    print(f"new session: {active_session_id}")
+                    console.print(f"new session: {active_session_id}")
                     continue
 
                 if command == "/history":
                     snapshot = await graph.aget_state(config)
                     messages = list((snapshot.values or {}).get("messages", []))
-                    _print_history(messages)
+                    _print_history(messages, console)
                     continue
 
                 turn_input: dict[str, Any] = {
@@ -159,7 +197,7 @@ async def run_cli(session_id: str | None = None) -> None:
                     "session_id": active_session_id,
                     "agent_status": "idle",
                 }
-                result = await _stream_turn(graph, turn_input, config)
+                result = await _stream_turn(graph, turn_input, config, console)
                 messages = list(result.get("messages", []))
     except Exception as exc:  # pragma: no cover - runtime guard for CLI startup
         print(f"Failed to start the chat agent: {exc}", file=sys.stderr)
