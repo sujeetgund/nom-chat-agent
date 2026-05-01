@@ -4,9 +4,10 @@
 
 from __future__ import annotations
 
-import re
 from collections.abc import Awaitable, Callable
 from typing import Any
+
+from pydantic import BaseModel, Field
 
 from langchain_core.messages import (
     AIMessage,
@@ -44,14 +45,9 @@ TOOL_STATUS_MAP = {
     "draft_email": "thinking",
 }
 
-ASK_NAME_MESSAGE = "Hi! What is your name?"
 
-
-def _latest_human_message(messages: list[BaseMessage]) -> HumanMessage | None:
-    for message in reversed(messages):
-        if isinstance(message, HumanMessage):
-            return message
-    return None
+class NameExtraction(BaseModel):
+    name: str | None = Field(default=None, description="The user's name if provided.")
 
 
 def _latest_ai_message(messages: list[BaseMessage]) -> AIMessage | None:
@@ -61,25 +57,23 @@ def _latest_ai_message(messages: list[BaseMessage]) -> AIMessage | None:
     return None
 
 
-def _extract_name(text: str) -> str | None:
-    cleaned = text.strip()
-    if not cleaned or "?" in cleaned:
-        return None
-
-    cleaned = re.sub(r"^(my name is|i am|i'm|im|this is)\s+", "", cleaned, flags=re.I)
-    cleaned = re.sub(r"[^A-Za-z0-9 .'-]", "", cleaned).strip()
-    words = [word for word in cleaned.split() if word]
-    if not words or len(words) > 3:
-        return None
-
-    candidate = " ".join(words)
-    if candidate.lower() in {"help", "hello", "hi", "thanks", "thank you"}:
-        return None
-    return candidate
-
-
-def _is_asking_for_name(message: AIMessage | None) -> bool:
-    return bool(message and message.content.strip().lower() == ASK_NAME_MESSAGE.lower())
+async def _extract_user_name(text: str) -> str | None:
+    extractor = get_chat_model().with_structured_output(
+        NameExtraction, method="json_schema"
+    )
+    result = await extractor.ainvoke(
+        [
+            SystemMessage(
+                content=(
+                    "Extract the person's name from the message. "
+                    "Return null if the message does not clearly contain a name. "
+                    "Do not guess."
+                )
+            ),
+            HumanMessage(content=f"Message: {text}"),
+        ]
+    )
+    return result.name.strip() if result.name else None
 
 
 async def agent_node(state: AgentState) -> dict[str, Any]:
@@ -87,32 +81,35 @@ async def agent_node(state: AgentState) -> dict[str, Any]:
     user_name = state.get("user_name")
 
     if not user_name:
-        latest_ai = _latest_ai_message(messages)
-        if not _is_asking_for_name(latest_ai):
-            return {
-                "messages": [AIMessage(content=ASK_NAME_MESSAGE)],
-                "agent_status": "idle",
-            }
+        latest_human = next(
+            (
+                message
+                for message in reversed(messages)
+                if isinstance(message, HumanMessage)
+            ),
+            None,
+        )
 
-        latest_human = _latest_human_message(messages)
-        extracted_name = _extract_name(latest_human.content) if latest_human else None
-        if extracted_name:
-            user_name = extracted_name
-        else:
-            return {
-                "messages": [AIMessage(content=ASK_NAME_MESSAGE)],
-                "agent_status": "idle",
-            }
+        if latest_human is not None:
+            extracted_name = await _extract_user_name(
+                str(getattr(latest_human, "content", ""))
+            )
+            if extracted_name:
+                user_name = extracted_name
 
     llm = get_chat_model().bind_tools(list(TOOL_MAP.values()))
     prompt = build_agent_system_prompt(user_name)
     response = await llm.ainvoke([SystemMessage(content=prompt)] + messages)
 
-    return {
+    result: dict[str, Any] = {
         "messages": [response],
         "agent_status": "thinking",
-        "user_name": user_name,
     }
+
+    if user_name:
+        result["user_name"] = user_name
+
+    return result
 
 
 def set_tool_status(state: AgentState) -> dict[str, str]:

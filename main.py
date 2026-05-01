@@ -38,14 +38,8 @@ def _find_last_ai_message(messages: list[BaseMessage]) -> AIMessage | None:
 def _print_banner(session_id: str) -> None:
     print("nom-chatbot CLI")
     print(f"session: {session_id}")
-    print("commands: /status, /history, /new, /exit, /quit")
+    print("commands: /history, /new, /exit, /quit")
     print()
-
-
-def _format_state_summary(state: dict[str, Any]) -> str:
-    user_name = state.get("user_name") or "unknown"
-    agent_status = state.get("agent_status") or "idle"
-    return f"session={state.get('session_id', 'unknown')} name={user_name} status={agent_status}"
 
 
 def _print_history(messages: list[BaseMessage]) -> None:
@@ -54,8 +48,29 @@ def _print_history(messages: list[BaseMessage]) -> None:
         return
 
     for message in messages:
-        role = "assistant" if isinstance(message, AIMessage) else "user"
+        role = "BOT" if isinstance(message, AIMessage) else "YOU"
         print(f"{role}: {_message_text(message)}")
+
+
+async def _stream_turn(
+    graph: Any,
+    turn_input: dict[str, Any],
+    config: dict[str, Any],
+) -> dict[str, Any]:
+    latest_state: dict[str, Any] = {}
+    current_status: str | None = "idle"
+
+    async for state in graph.astream(turn_input, config=config, stream_mode="values"):
+        latest_state = dict(state or {})
+        next_status = latest_state.get("agent_status")
+        if next_status and next_status != current_status:
+            print(f"STATUS: {next_status}")
+            current_status = next_status
+
+    if current_status != "idle":
+        print("STATUS: idle")
+
+    return latest_state
 
 
 async def _read_input(prompt: str) -> str:
@@ -65,7 +80,6 @@ async def _read_input(prompt: str) -> str:
 async def run_cli(session_id: str | None = None) -> None:
     settings = get_settings()
     active_session_id = session_id or uuid4().hex
-    current_user_name: str | None = None
 
     try:
         async with AsyncPostgresSaver.from_conn_string(
@@ -79,7 +93,7 @@ async def run_cli(session_id: str | None = None) -> None:
 
             while True:
                 try:
-                    user_input = (await _read_input("you> ")).strip()
+                    user_input = (await _read_input("YOU: ")).strip()
                 except (EOFError, KeyboardInterrupt):
                     print()
                     break
@@ -94,16 +108,7 @@ async def run_cli(session_id: str | None = None) -> None:
                 if command == "/new":
                     active_session_id = uuid4().hex
                     config = {"configurable": {"thread_id": active_session_id}}
-                    current_user_name = None
                     print(f"new session: {active_session_id}")
-                    continue
-
-                if command == "/status":
-                    snapshot = await graph.aget_state(config)
-                    state = dict(snapshot.values or {})
-                    if current_user_name and not state.get("user_name"):
-                        state["user_name"] = current_user_name
-                    print(_format_state_summary(state))
                     continue
 
                 if command == "/history":
@@ -117,15 +122,10 @@ async def run_cli(session_id: str | None = None) -> None:
                     "session_id": active_session_id,
                     "agent_status": "idle",
                 }
-                if current_user_name:
-                    turn_input["user_name"] = current_user_name
-
-                result = await graph.ainvoke(turn_input, config=config)
+                result = await _stream_turn(graph, turn_input, config)
                 messages = list(result.get("messages", []))
                 last_ai = _find_last_ai_message(messages)
-                print(f"assistant: {_message_text(last_ai) if last_ai else ''}")
-
-                current_user_name = result.get("user_name") or current_user_name
+                print(f"BOT: {_message_text(last_ai) if last_ai else ''}")
     except Exception as exc:  # pragma: no cover - runtime guard for CLI startup
         print(f"Failed to start the chat agent: {exc}", file=sys.stderr)
         raise SystemExit(1) from exc

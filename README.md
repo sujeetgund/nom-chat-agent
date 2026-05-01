@@ -8,8 +8,8 @@ The agent keeps the original LangGraph structure, tool routing, and persisted se
 - Answers questions using the local knowledge base in `docs/` and the repo README.
 - Generates project proposals and PRDs through dedicated tools.
 - Persists each conversation with LangGraph checkpointing.
-- Captures the user name on the first interaction and uses it in later replies.
-- Exposes simple CLI commands for session management and status inspection.
+- Lets the agent learn the user's name from the conversation itself.
+- Shows live agent status changes while the graph runs.
 
 ## Requirements
 
@@ -46,12 +46,13 @@ uv run python main.py --session-id <thread-id>
 
 Inside the chat loop, use these commands:
 
-- `/status` shows the current agent status, session id, and known user name.
 - `/history` prints the conversation stored in the current thread.
 - `/new` starts a fresh session with a new thread id.
 - `/exit` or `/quit` leaves the CLI.
 
-Any other input is treated as a normal chat message.
+Any other input is treated as a normal chat message and is echoed as `YOU:`.
+Agent responses are printed as `BOT:`. Status updates appear as `STATUS:` lines
+while the graph executes.
 
 ## Architecture
 
