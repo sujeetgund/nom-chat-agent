@@ -11,7 +11,8 @@ from typing import Iterable
 from langchain_core.tools import tool
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-SEARCHABLE_EXTENSIONS = {".md", ".txt", ".py"}
+KB_DIR = PROJECT_ROOT / "kb"
+SEARCHABLE_EXTENSIONS = {".md", ".txt"}
 
 
 @dataclass(frozen=True)
@@ -22,11 +23,15 @@ class SearchHit:
 
 
 def _iter_search_files() -> Iterable[Path]:
-    for path in PROJECT_ROOT.rglob("*"):
+    # Restrict searches to the `kb/` directory at the project root.
+    if not KB_DIR.exists() or not KB_DIR.is_dir():
+        return
+    for path in KB_DIR.rglob("*"):
         if not path.is_file():
             continue
         if path.suffix.lower() not in SEARCHABLE_EXTENSIONS:
             continue
+        # skip hidden files or directories
         if any(part.startswith(".") for part in path.relative_to(PROJECT_ROOT).parts):
             continue
         yield path
