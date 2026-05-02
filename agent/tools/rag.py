@@ -11,7 +11,7 @@ import asyncpg
 from langchain_core.tools import tool
 from langchain_huggingface import HuggingFaceEmbeddings, HuggingFaceEndpointEmbeddings
 
-from config import get_settings
+from config import get_settings, AVAILABLE_SOURCE_TYPES
 import json
 
 
@@ -33,11 +33,19 @@ def _get_embeddings_model() -> HuggingFaceEmbeddings:
 
 
 async def search_knowledge_base(
-    query: str, *, top_k: int = 5
+    query: str, *, source_type: str | None = None, top_k: int = 5
 ) -> tuple[list[SearchHit], float]:
     """
     Search pgvector for relevant documents using embedding similarity.
-    Returns (hits, total_retrieval_time_ms).
+
+    Args:
+        query: The search query
+        source_type: Optional filter by document type (e.g. 'service', 'case_study', 'blog', 'company')
+                    If None, searches across all types.
+        top_k: Number of results to return (default 5)
+
+    Returns:
+        (hits, total_retrieval_time_ms)
     """
     start_time = time.time()
     settings = get_settings()
@@ -52,16 +60,23 @@ async def search_knowledge_base(
     conn = await asyncpg.connect(settings.database_url)
 
     try:
-        # Query pgvector for similar documents
-        search_query = """
+        # Build SQL with optional source_type filter
+        where_clause = "WHERE (metadata->>'source_type') = $3" if source_type else ""
+        search_query = f"""
             SELECT content, metadata, 
                    1 - (embedding <=> $1::vector) as similarity
             FROM website_embeddings
+            {where_clause}
             ORDER BY embedding <=> $1::vector
             LIMIT $2;
         """
 
-        rows = await conn.fetch(search_query, query_embedding_str, top_k)
+        if source_type:
+            rows = await conn.fetch(
+                search_query, query_embedding_str, top_k, source_type
+            )
+        else:
+            rows = await conn.fetch(search_query, query_embedding_str, top_k)
 
         hits: list[SearchHit] = []
         for row in rows:
@@ -131,7 +146,19 @@ def format_search_results(
 
 
 @tool
-async def rag_search(query: str, top_k: int = 5) -> str:
-    """Search the local knowledge base for relevant project context using embeddings."""
-    hits, retrieval_time_ms = await search_knowledge_base(query, top_k=top_k)
+async def rag_search(query: str, source_type: str | None = None, top_k: int = 5) -> str:
+    """Search the local knowledge base for relevant project context using embeddings.
+
+    Args:
+        query: The search query
+        source_type: Optional filter by document type. Available options: 'service', 'case_study', 'blog', 'company'.
+                    If not provided, searches across all document types.
+        top_k: Number of results to return (default 5)
+
+    Returns:
+        Formatted search results with titles, URLs, similarity scores, and content preview.
+    """
+    hits, retrieval_time_ms = await search_knowledge_base(
+        query, source_type=source_type, top_k=top_k
+    )
     return format_search_results(query, hits, retrieval_time_ms)

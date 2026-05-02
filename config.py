@@ -53,3 +53,7 @@ class Settings(BaseSettings):
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:
     return Settings()
+
+
+# Available source types in the knowledge base
+AVAILABLE_SOURCE_TYPES = ["service", "case_study", "blog", "company"]
