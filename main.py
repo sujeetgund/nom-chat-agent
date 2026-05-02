@@ -60,10 +60,10 @@ def _chunk_text(chunk: Any) -> str:
 
 
 def _print_banner(session_id: str, console: Console) -> None:
-    console.print("[bold green]nom-chatbot CLI[/]")
+    console.print("[bold green]NOM CHAT CLI[/]")
     console.print(f"session: [cyan]{session_id}[/]")
     console.print(
-        "commands: [yellow]/history[/], [yellow]/new[/], [yellow]/exit[/], [yellow]/quit[/]"
+        "commands: [yellow]/history[/], [yellow]/new[/], [yellow]/quit[/]"
     )
     console.print()
 
