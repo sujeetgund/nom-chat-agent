@@ -222,11 +222,11 @@ app/
 
 ### Phase 1 — Core Agent (Week 1)
 
-- [ ]  LangGraph 2-node graph with `AgentState`
+- [x]  LangGraph 2-node graph with `AgentState`
 - [ ]  `rag_search` tool + pgvector setup
-- [ ]  `PostgresSaver` checkpointer
+- [x]  `PostgresSaver` checkpointer
 - [ ]  FastAPI SSE endpoint
-- [ ]  User name capture flow via system prompt
+- [x]  User name capture flow via system prompt
 
 ### Phase 2 — Document Generation (Week 2)
 
@@ -252,5 +252,5 @@ app/
 | Session key | LangGraph thread_id | Don't build a separate session table |
 | User name storage | AgentState.user_name | Checkpointed automatically, no separate DB call |
 | PRD/Proposal as tools | Yes | Enables status tracking; not free-form agent output |
-| Web search | Out of scope v1 | Keep RAG grounded to website content only |
+| Web search | DuckDuckGo Search for now | Simply use DuckDuckGo Search tool from langchain |
 | Streaming | SSE (not WebSocket) | Simpler, stateless, fits FastAPI well |

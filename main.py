@@ -14,6 +14,9 @@ from rich.live import Live
 from rich.panel import Panel
 from rich.text import Text
 from rich.markdown import Markdown
+from rich.syntax import Syntax
+from rich.rule import Rule
+import json
 
 from agent.graph import build_graph
 from config import get_settings
@@ -92,6 +95,9 @@ async def _stream_turn(
     with Live(panel, console=console, refresh_per_second=10) as live:
         final_ai_text: str | None = None
         final_tool_calls: list[tuple[str, Any]] = []
+        final_tool_responses: list[tuple[str, Any]] = []
+        seen_tool_call_ids: set[str] = set()
+        seen_tool_response_ids: set[str] = set()
 
         async for event in graph.astream_events(
             turn_input, config=config, version="v2"
@@ -120,9 +126,26 @@ async def _stream_turn(
                             last_ai = m
                             if getattr(m, "tool_calls", None):
                                 for call in m.tool_calls:
-                                    final_tool_calls.append(
-                                        (call.get("name", ""), call.get("args", {}))
-                                    )
+                                    call_id = call.get("id", "")
+                                    if call_id and call_id not in seen_tool_call_ids:
+                                        seen_tool_call_ids.add(call_id)
+                                        final_tool_calls.append(
+                                            (call.get("name", ""), call.get("args", {}))
+                                        )
+
+                        # tool response messages can appear as ToolMessage-like dicts or objects
+                        if isinstance(m, dict) and m.get("tool_call_id"):
+                            tool_id = m.get("tool_call_id")
+                            if tool_id not in seen_tool_response_ids:
+                                seen_tool_response_ids.add(tool_id)
+                                final_tool_responses.append((tool_id, m.get("content")))
+                        elif hasattr(m, "tool_call_id") and getattr(m, "tool_call_id"):
+                            tool_id = getattr(m, "tool_call_id")
+                            if tool_id not in seen_tool_response_ids:
+                                seen_tool_response_ids.add(tool_id)
+                                final_tool_responses.append(
+                                    (tool_id, getattr(m, "content"))
+                                )
 
                     if last_ai:
                         final_ai_text = _message_text(last_ai)
@@ -133,16 +156,58 @@ async def _stream_turn(
                         current_status = next_status
                         live.update(Panel(assistant_text, title=f"STATUS: {status}"))
 
-    # After streaming finishes, print concise tool-call info and final AI message
-    if final_tool_calls:
-        for name, args in final_tool_calls:
-            console.print(f"[yellow]TOOL:[/] {name} {args}")
+    # After streaming finishes, print status, tool-calls, tool-responses, then final AI message
+    console.print(Rule())
 
+    # Print last agent status (if any)
+    if current_status:
+        console.print(f"[green]STATUS:[/] {current_status}")
+
+    # Helper to pretty-print/truncate args
+    def _pretty_args(obj: Any, max_len: int = 400) -> str:
+        try:
+
+            def _truncate(item):
+                if isinstance(item, str) and len(item) > max_len:
+                    return item[:max_len] + "…"
+                if isinstance(item, dict):
+                    return {k: _truncate(v) for k, v in item.items()}
+                if isinstance(item, list):
+                    return [_truncate(x) for x in item]
+                return item
+
+            truncated = _truncate(obj)
+            return json.dumps(truncated, indent=2, ensure_ascii=False)
+        except Exception:
+            return str(obj)
+
+    # Tool calls
+    if final_tool_calls:
+        console.print("[bold yellow]Tool Calls:[/]")
+        for name, args in final_tool_calls:
+            pretty = _pretty_args(args)
+            syntax = Syntax(pretty, "json", theme="monokai", word_wrap=True)
+            console.print(Panel(syntax, title=f"TOOL: {name}"))
+
+    # Tool responses
+    if final_tool_responses:
+        console.print("[bold cyan]Tool Responses:[/]")
+        for call_id, content in final_tool_responses:
+            if isinstance(content, str):
+                console.print(Panel(Markdown(content), title=f"Response: {call_id}"))
+            else:
+                pretty = _pretty_args(content)
+                syntax = Syntax(pretty, "json", theme="monokai", word_wrap=True)
+                console.print(Panel(syntax, title=f"Response: {call_id}"))
+
+    # Final assistant message
     if final_ai_text:
         console.print(Markdown(final_ai_text))
 
+    # Close turn with idle status indicator
     if current_status != "idle":
         console.print(f"[green]STATUS:[/] idle")
+    console.print(Rule())
 
     return latest_state
 
