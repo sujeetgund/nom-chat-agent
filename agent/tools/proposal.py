@@ -2,11 +2,13 @@
 
 from __future__ import annotations
 
+import asyncio
+
 from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.tools import tool
 
 from .common import get_chat_model
-from .estimate import estimate_project_cost
+from .prd import _generate_cost_estimate, _create_artifact
 
 PROPOSAL_SYSTEM_PROMPT = """
 You are a senior solutions consultant.
@@ -15,23 +17,32 @@ Write a proposal that includes:
 1. Executive Summary
 2. Problem Statement
 3. Proposed Solution
-4. Scope
-5. Assumptions
-6. Timeline
+4. Scope and Deliverables
+5. Timeline
+6. Assumptions and Constraints
 7. Team / Delivery Approach
-8. Cost Estimate
-9. Risks and Open Questions
+8. Risks and Mitigation
+9. Next Steps
 
 Keep it practical, concise, and specific to the project brief.
+Do NOT include a cost estimate section; it will be added separately.
 """.strip()
 
 
 @tool
-async def generate_proposal(requirements: str, research: str) -> str:
-    """Generate a structured project proposal from a brief and research notes."""
+async def generate_proposal(requirements: str, research: str = "") -> str:
+    """Generate a structured project proposal as a markdown artifact (saved to artifacts/).
 
+    Args:
+        requirements: Project brief and requirements
+        research: Supporting research notes (auto-gathered if not provided)
+
+    Returns:
+        Status message with artifact path (e.g., "✓ Proposal created: artifacts/PROPOSAL_2026-05-02_project.md")
+    """
     llm = get_chat_model()
-    estimate = estimate_project_cost(requirements)
+
+    # Generate proposal content
     response = await llm.ainvoke(
         [
             SystemMessage(content=PROPOSAL_SYSTEM_PROMPT),
@@ -39,13 +50,26 @@ async def generate_proposal(requirements: str, research: str) -> str:
                 content=(
                     "Project brief:\n\n"
                     f"{requirements}\n\n"
-                    "Research notes:\n\n"
-                    f"{research}\n\n"
-                    "Cost estimate:\n\n"
-                    f"{estimate.hours_low}-{estimate.hours_high} hours at ${estimate.hourly_rate}/hour"
-                    f" (${estimate.total_low:,}-${estimate.total_high:,})."
+                    + (
+                        f"Supporting research and context:\n\n{research}"
+                        if research
+                        else ""
+                    )
                 )
             ),
         ]
     )
-    return response.content
+
+    proposal_content = response.content
+    cost_estimate = _generate_cost_estimate(requirements, "proposal")
+    full_content = proposal_content + "\n" + cost_estimate
+
+    # Extract project name from requirements
+    project_name = requirements.split("\n")[0][:40] or "project"
+
+    # Write artifact
+    filepath, rel_path = await asyncio.to_thread(
+        _create_artifact, full_content, project_name, "proposal"
+    )
+
+    return f"✓ Proposal created: {rel_path}\n\nRetrieve this file to review the full proposal."

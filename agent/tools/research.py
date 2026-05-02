@@ -19,8 +19,7 @@ from langchain_community.utilities import DuckDuckGoSearchAPIWrapper
 from .rag import format_search_results, search_knowledge_base
 
 
-@tool
-async def web_search(query: str, top_k: int = 5) -> str:
+async def _web_search_impl(query: str, top_k: int = 5) -> str:
     """Perform a DuckDuckGo web search and return formatted results.
 
     This uses LangChain's `DuckDuckGoSearchAPIWrapper.run()` which returns a
@@ -43,7 +42,16 @@ async def web_search(query: str, top_k: int = 5) -> str:
 
 
 @tool
-async def research(topic: str, top_k: int = 5, use_web: bool = False) -> str:
+async def web_search(query: str, top_k: int = 5) -> str:
+    """Perform a DuckDuckGo web search and return formatted results.
+
+    This uses LangChain's `DuckDuckGoSearchAPIWrapper.run()` which returns a
+    plain-text summary of results.
+    """
+    return await _web_search_impl(query, top_k)
+
+
+async def _research_impl(topic: str, top_k: int = 5, use_web: bool = False) -> str:
     """Return grounded research notes for a topic.
 
     Behavior:
@@ -66,7 +74,19 @@ async def research(topic: str, top_k: int = 5, use_web: bool = False) -> str:
     # Determine if we should run web search automatically: run if requested
     # explicitly or if there are no KB hits
     if use_web or not hits:
-        web_results = await web_search(topic, top_k=top_k)
+        web_results = await _web_search_impl(topic, top_k=top_k)
         output_parts.extend(["", "Web search results:", web_results])
 
     return "\n".join(output_parts)
+
+
+@tool
+async def research(topic: str, top_k: int = 5, use_web: bool = False) -> str:
+    """Return grounded research notes for a topic.
+
+    Behavior:
+    - Always attempt local KB retrieval first.
+    - If `use_web=True` or local results are empty/weak, also run web search
+      and include the web findings after the KB summary.
+    """
+    return await _research_impl(topic, top_k, use_web)
