@@ -1,8 +1,11 @@
 ---
+source_type: "case_study"
+url: "/case-studies/protocol-summarizer-ai-agent"
 title: "Protocol Summarizer – AI That Turns Complex Medical Docs Into Action"
 date: "2025-05-18"
 author: "mansiikumarii"
-tags: ["AI Agents", "Healthcare", "Automation", "Medical", "Document Processing"]
+tags:
+  ["AI Agents", "Healthcare", "Automation", "Medical", "Document Processing"]
 status: published
 industry: "HEALTHCARE"
 description: "An AI agent that accepts clinical protocol documents, uses a 3-model LLM chain to extract key info, and outputs slide-style summaries for busy medical staff."
@@ -16,7 +19,7 @@ stat3_label: "TIME TO LAUNCH"
 
 # Protocol Summarizer – AI That Turns Complex Medical Docs Into Action
 
-*by Divam Digest*
+_by Divam Digest_
 
 ---
 

@@ -6,6 +6,8 @@ author: "mansiikumarii"
 tags: ["AI", "Automation", "AI Agents", "Use Cases", "Enterprise"]
 status: "published"
 source: "https://divamtech.com/blogs/ai-agents-25-use-cases-enterprise-automation"
+url: "/blogs/ai-agents-in-action-25-real-world-use-cases"
+source_type: "blog"
 ---
 
 # AI Agents in Action – 25 Real-World Use Cases That Prove the Power of Intelligent Automation

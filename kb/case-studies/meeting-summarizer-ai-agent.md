@@ -1,4 +1,6 @@
 ---
+source_type: "case_study"
+url: "/case-studies/meeting-summarizer-ai-agent"
 title: "Meeting Summarizer Agent – Get the Minutes, Not the Mess"
 date: "2025-05-25"
 author: "mansiikumarii"
@@ -16,7 +18,7 @@ stat3_label: "TIME TO LAUNCH"
 
 # Meeting Summarizer Agent – Get the Minutes, Not the Mess
 
-*by Divam Digest*
+_by Divam Digest_
 
 ---
 

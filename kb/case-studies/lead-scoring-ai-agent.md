@@ -1,4 +1,6 @@
 ---
+source_type: "case_study"
+url: "/case-studies/lead-scoring-ai-agent"
 title: "Lead Scoring Agent – AI That Tells You Who to Call First"
 date: "2025-05-20"
 author: "mansiikumarii"
@@ -16,7 +18,7 @@ stat3_label: "TIME TO LAUNCH"
 
 # Lead Scoring Agent – AI That Tells You Who to Call First
 
-*by Divam Digest*
+_by Divam Digest_
 
 ---
 

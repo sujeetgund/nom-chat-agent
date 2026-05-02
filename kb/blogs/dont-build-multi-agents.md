@@ -1,4 +1,6 @@
 ---
+source_type: "blog"
+url: "/blogs/dont-build-multi-agents"
 title: "Don't Build Multi-Agents"
 excerpt: "Why multi-agent architectures are fragile in 2025, and the two core principles of context engineering that should guide how you build reliable AI agents."
 date: "2025-06-12"
@@ -10,7 +12,7 @@ source: "https://cognition.ai/blog/dont-build-multi-agents"
 
 # Don't Build Multi-Agents
 
-*by Walden Yan — Cognition AI*
+_by Walden Yan — Cognition AI_
 
 ---
 
@@ -35,7 +37,7 @@ HTML was introduced in 1993. In 2013, Facebook released React — not just a sca
 
 At the core of reliability is **Context Engineering**.
 
-Models in 2025 are extremely intelligent. But even the smartest human can't do their job effectively without context. *Prompt engineering* was coined for writing tasks in the ideal format for an LLM chatbot. *Context engineering* is the next level — doing this automatically in a dynamic system. It is effectively the **#1 job** of engineers building AI agents.
+Models in 2025 are extremely intelligent. But even the smartest human can't do their job effectively without context. _Prompt engineering_ was coined for writing tasks in the ideal format for an LLM chatbot. _Context engineering_ is the next level — doing this automatically in a dynamic system. It is effectively the **#1 job** of engineers building AI agents.
 
 ---
 
@@ -77,13 +79,13 @@ Principles 1 and 2 are so critical, and so rarely worth violating, that you shou
 
 ## Compliant Architectures
 
-### Single-Threaded Linear Agent *(recommended default)*
+### Single-Threaded Linear Agent _(recommended default)_
 
 The simplest way to follow both principles. Context is continuous. This will get you very far for the vast majority of production tasks.
 
 **Limitation:** For very large tasks, context windows start to overflow.
 
-### Context Compression Agent *(for truly long-duration tasks)*
+### Context Compression Agent _(for truly long-duration tasks)_
 
 Introduce a dedicated LLM whose key purpose is to compress a history of actions and conversation into key details, events, and decisions. This is hard to get right — it requires investment in figuring out what information is truly key. Depending on the domain, consider fine-tuning a smaller model (something Cognition has done internally).
 
@@ -92,9 +94,11 @@ Introduce a dedicated LLM whose key purpose is to compress a history of actions 
 ## Real-World Examples
 
 ### Claude Code Subagents
+
 As of June 2025, Claude Code spawns subtasks but **never does work in parallel with the subtask agent**. The subtask agent is usually only tasked with answering a question, not writing code — because it lacks the main agent's context needed to do anything more. Running parallel subagents would produce conflicting responses. The designers of Claude Code took a purposefully simple approach.
 
 ### Edit Apply Models
+
 In 2024, a common practice was using an "edit apply model" — a small model that rewrites an entire file given a markdown explanation of desired changes, rather than having a large model output a properly formatted diff. These systems were still faulty: the small model would misinterpret instructions due to slight ambiguities. Today, edit decision-making and applying are more often done by a single model in one action.
 
 ---

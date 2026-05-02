@@ -5,6 +5,8 @@ date: "2026-02-01"
 author: "sujeetgund"
 tags: ["RAG", "Vector Search", "BM25", "Hybrid Search", "LangChain"]
 status: "published"
+url: "/blogs/only-vector-search-is-not-optimal-rag-search"
+source_type: "blog"
 ogImage: "https://github.com/user-attachments/assets/5c773113-8859-432d-a6d8-185f3eb47ea3"
 coverImage: "https://github.com/user-attachments/assets/5c773113-8859-432d-a6d8-185f3eb47ea3"
 ---

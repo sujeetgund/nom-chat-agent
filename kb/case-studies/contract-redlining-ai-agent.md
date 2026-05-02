@@ -1,4 +1,6 @@
 ---
+source_type: "case_study"
+url: "/case-studies/contract-redlining-ai-agent"
 title: "Contract Redlining Agent – Let AI Review Legal Docs So You Don't Have To"
 date: "2025-05-19"
 author: "mansiikumarii"
@@ -16,7 +18,7 @@ stat3_label: "TIME TO LAUNCH"
 
 # Contract Redlining Agent – Let AI Review Legal Docs So You Don't Have To
 
-*by Divam Digest*
+_by Divam Digest_
 
 ---
 

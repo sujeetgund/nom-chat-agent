@@ -1,4 +1,6 @@
 ---
+source_type: "case_study"
+url: "/case-studies/ai-writing-assistant"
 title: "AI Writing Assistant – Keep Every Word On-Brand, Instantly"
 date: "2025-05-21"
 author: "mansiikumarii"
@@ -16,7 +18,7 @@ stat3_label: "TIME TO LAUNCH"
 
 # AI Writing Assistant – Keep Every Word On-Brand, Instantly
 
-*by Divam Digest*
+_by Divam Digest_
 
 ---
 

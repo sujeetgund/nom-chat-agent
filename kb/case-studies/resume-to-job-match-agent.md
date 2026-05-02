@@ -8,6 +8,8 @@ industry: "HR TECH"
 description: "An AI agent that parses resumes, extracts skills and experience, and ranks candidates against a live job pool to deliver top-match results instantly."
 stat1_value: "GPT-4o"
 stat1_label: "LLM USED"
+url: "/case-studies/resume-to-job-match-agent"
+source_type: "case_study"
 stat2_value: "VECTOR DB"
 stat2_label: "DATA SOURCE"
 stat3_value: "EASY"
@@ -16,7 +18,7 @@ stat3_label: "TIME TO LAUNCH"
 
 # Resume-to-Job-Match Agent – AI That Finds the Right Job in Seconds
 
-*by Divam Digest*
+_by Divam Digest_
 
 ---
 

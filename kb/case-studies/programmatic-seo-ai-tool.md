@@ -1,4 +1,6 @@
 ---
+source_type: "case_study"
+url: "/case-studies/programmatic-seo-ai-tool"
 title: "Programmatic SEO Tool – Publish 1,000+ SEO Pages Overnight"
 date: "2025-05-22"
 author: "mansiikumarii"
@@ -16,7 +18,7 @@ stat3_label: "TIME TO LAUNCH"
 
 # Programmatic SEO Tool – Publish 1,000+ SEO Pages Overnight
 
-*by Divam Digest*
+_by Divam Digest_
 
 ---
 

@@ -5,11 +5,13 @@ date: "2024-01-15"
 author: "mansiikumarii"
 tags: ["Rebranding", "Brand Identity", "Design", "Innovation", "Divam"]
 status: "published"
+url: "/blogs/rebranding-of-divam-tech"
+source_type: "blog"
 ---
 
 # Rebranding of Divam Tech
 
-*by Divam Digest*
+_by Divam Digest_
 
 ---
 
@@ -46,9 +48,10 @@ This concept aligned perfectly with the company's mission—**communication thro
 The idea resonated deeply with the team.
 
 A hidden message within the logo added **depth and symbolism**, representing:
-- Innovation beneath simplicity  
-- Inclusion and curiosity  
-- The idea that anyone can decode and be part of the journey  
+
+- Innovation beneath simplicity
+- Inclusion and curiosity
+- The idea that anyone can decode and be part of the journey
 
 It became more than just a logo—it became a **story**.
 
@@ -59,8 +62,9 @@ It became more than just a logo—it became a **story**.
 Divam Technology unveiled a sleek, modern logo featuring a subtle Morse code representation.
 
 The design:
-- Spells **"Divam"** in Morse code  
-- Uses **minimalist, elegant lines**  
+
+- Spells **"Divam"** in Morse code
+- Uses **minimalist, elegant lines**
 - Blends **tradition with modern technology**
 
 It reflects both the company’s roots in communication and its forward-looking vision.
@@ -82,9 +86,10 @@ It was one of the earliest forms of long-distance communication—making it the 
 The old logo served its purpose—but Divam has evolved.
 
 The company today is:
-- More innovative  
-- More adaptive  
-- More aligned with the future of technology  
+
+- More innovative
+- More adaptive
+- More aligned with the future of technology
 
 This rebranding represents that journey of growth and transformation.
 
@@ -95,8 +100,9 @@ This rebranding represents that journey of growth and transformation.
 The new Divam logo is more than a visual update—it's a **statement of identity**.
 
 It captures:
-- The essence of communication  
-- The spirit of innovation  
-- The commitment to continuous evolution  
+
+- The essence of communication
+- The spirit of innovation
+- The commitment to continuous evolution
 
 As Divam moves forward, this new identity will serve as a constant reminder of its mission—to push boundaries and shape the future of digital communication.

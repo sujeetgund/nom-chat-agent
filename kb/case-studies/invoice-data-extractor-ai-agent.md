@@ -1,4 +1,6 @@
 ---
+source_type: "case_study"
+url: "/case-studies/invoice-data-extractor-ai-agent"
 title: "Invoice Data Extractor – Turn Scanned Bills into Structured Data with AI"
 excerpt: "How DivamTech's Invoice Data Extractor Agent eliminates bottlenecks in AP/AR workflows and brings structure to unstructured invoice data."
 date: "2025-05-24"
@@ -17,7 +19,7 @@ stat3_label: "TIME TO LAUNCH"
 
 # Invoice Data Extractor – Turn Scanned Bills into Structured Data with AI
 
-*by Divam Digest*
+_by Divam Digest_
 
 ---
 
