@@ -12,6 +12,7 @@ export type SendMessageOptions = {
   onToken?: (token: string, runId?: string) => void;
   onStatus?: (status: { status: string; message?: string }) => void;
   onToolCall?: (toolCall: { name: string; args: any }, runId?: string) => void;
+  onToolResult?: (toolResult: { tool_call_id: string; result: any }) => void;
   onDone?: () => void;
 };
 
@@ -20,7 +21,7 @@ export function sendMessage(
   message: string,
   opts: SendMessageOptions = {},
 ): Promise<ChatResponse> {
-  const { onToken, onStatus, onToolCall, onDone } = opts;
+  const { onToken, onStatus, onToolCall, onToolResult, onDone } = opts;
 
   return new Promise<ChatResponse>(async (resolve, reject) => {
     try {
@@ -83,6 +84,8 @@ export function sendMessage(
                 onStatus?.({ status: payload.status });
               } else if (eventType === "tool_call") {
                 onToolCall?.(payload, payload.run_id);
+              } else if (eventType === "tool_result") {
+                onToolResult?.(payload);
               } else if (eventType === "error") {
                 console.error("Backend stream error:", payload.detail);
               }

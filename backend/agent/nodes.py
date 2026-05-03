@@ -109,7 +109,10 @@ async def agent_node(state: AgentState) -> dict[str, Any]:
 
     llm = get_chat_model().bind_tools(list(TOOL_MAP.values()))
     prompt = build_agent_system_prompt(user_name)
-    response = await llm.ainvoke([SystemMessage(content=prompt)] + messages)
+    response = await llm.ainvoke(
+        [SystemMessage(content=prompt)] + messages,
+        config={"tags": ["main_llm"]}
+    )
 
     result: dict[str, Any] = {
         "messages": [response],

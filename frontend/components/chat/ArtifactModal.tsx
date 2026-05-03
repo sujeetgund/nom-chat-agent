@@ -39,12 +39,31 @@ export function ArtifactModal({ toolCall, onClose }: ArtifactModalProps) {
 
         {/* Body */}
         <div className="flex-1 overflow-y-auto p-6 bg-canvas text-ink text-sm">
-          {toolCall.args ? (
-            <pre className="font-mono whitespace-pre-wrap leading-relaxed text-body bg-surface-soft p-4 rounded-lg border border-hairline">
-              {typeof toolCall.args === "string" 
-                ? toolCall.args 
-                : JSON.stringify(toolCall.args, null, 2)}
-            </pre>
+          {toolCall.result ? (
+            <div className="prose prose-sm max-w-none prose-slate">
+              {typeof toolCall.result === "string" ? (
+                <div className="whitespace-pre-wrap leading-relaxed">
+                  {toolCall.result}
+                </div>
+              ) : (
+                <pre className="font-mono whitespace-pre-wrap leading-relaxed text-body bg-surface-soft p-4 rounded-lg border border-hairline">
+                  {JSON.stringify(toolCall.result, null, 2)}
+                </pre>
+              )}
+            </div>
+          ) : toolCall.args ? (
+            <div className="bg-surface-soft p-4 rounded-lg border border-hairline">
+              <p className="text-xs font-semibold text-muted uppercase tracking-widest mb-2">Request Parameters</p>
+              <pre className="font-mono whitespace-pre-wrap leading-relaxed text-body">
+                {typeof toolCall.args === "string" 
+                  ? toolCall.args 
+                  : JSON.stringify(toolCall.args, null, 2)}
+              </pre>
+              <div className="mt-4 flex items-center gap-2 text-primary animate-pulse">
+                <span className="w-2 h-2 rounded-full bg-primary"></span>
+                <span className="text-xs font-medium">Generating artifact...</span>
+              </div>
+            </div>
           ) : (
             <p className="text-muted italic">No content available for this artifact.</p>
           )}

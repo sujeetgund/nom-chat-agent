@@ -44,26 +44,38 @@ export function MessageComponent({ message }: MessageProps) {
           )}
         </div>
 
-        {message.toolCalls && message.toolCalls.length > 0 && (
+        {(message.toolCalls && message.toolCalls.length > 0) && (
           <div className="mt-6 pt-4 border-t border-surface-dark-soft">
             <p className="text-xs font-semibold text-on-dark-soft uppercase tracking-widest mb-3">
               Generated Artifacts
             </p>
             <div className="flex flex-wrap gap-2">
-              {message.toolCalls.map((tool) => (
-                <button
-                  key={tool.id}
-                  onClick={() => setSelectedArtifact(tool)}
-                  className="text-xs bg-surface-dark-elevated text-on-dark px-3 py-1.5 rounded-md border border-surface-dark-soft hover:bg-primary hover:text-on-primary transition-colors flex items-center gap-2"
-                >
-                  <span className="w-1.5 h-1.5 rounded-full bg-accent-amber"></span>
-                  {tool.name}
-                  <svg className="ml-1" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="15 3 21 3 21 9"></polyline>
-                    <line x1="10" y1="14" x2="21" y2="3"></line>
-                  </svg>
-                </button>
-              ))}
+              {message.toolCalls.map((tool) => {
+                const result = message.toolResults?.find(r => r.toolCallId === tool.id)?.result;
+                return (
+                  <button
+                    key={tool.id}
+                    onClick={() => setSelectedArtifact({ ...tool, result })}
+                    className={`text-xs px-3 py-1.5 rounded-md border transition-colors flex items-center gap-2 ${
+                      result 
+                        ? "bg-primary text-on-primary border-primary hover:bg-primary-dark" 
+                        : "bg-surface-dark-elevated text-on-dark border-surface-dark-soft hover:bg-surface-dark-soft"
+                    }`}
+                  >
+                    <span className={`w-1.5 h-1.5 rounded-full ${result ? "bg-accent-amber animate-pulse" : "bg-muted"}`}></span>
+                    {tool.name}
+                    {result && (
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="20 6 9 17 4 12"></polyline>
+                      </svg>
+                    )}
+                    <svg className="ml-1 opacity-60" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="15 3 21 3 21 9"></polyline>
+                      <line x1="10" y1="14" x2="21" y2="3"></line>
+                    </svg>
+                  </button>
+                );
+              })}
             </div>
           </div>
         )}

@@ -51,19 +51,15 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
     setIsLoading(true);
     setError(null);
 
-    const runIdToMessageId: Record<string, string> = {};
-
     try {
       await sendMessage(sessionId, userMessage, {
         onToken(token, runId) {
+          const msgId = runId ? `assistant-${runId}` : "assistant-default";
           setMessages((prev) => {
             const msgs = [...prev];
-            const currentRunId = runId || "default";
-            let msgId = runIdToMessageId[currentRunId];
+            const idx = msgs.findIndex((m) => m.id === msgId);
 
-            if (!msgId) {
-              msgId = `assistant-${Date.now()}-${currentRunId}`;
-              runIdToMessageId[currentRunId] = msgId;
+            if (idx === -1) {
               msgs.push({
                 id: msgId,
                 role: "assistant",
@@ -72,41 +68,64 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
                 toolCalls: [],
               });
             } else {
-              const idx = msgs.findIndex(m => m.id === msgId);
-              if (idx !== -1) {
-                msgs[idx] = { ...msgs[idx], content: msgs[idx].content + token };
-              }
+              msgs[idx] = { ...msgs[idx], content: msgs[idx].content + token };
             }
             return msgs;
           });
         },
         onStatus(status) {
-          setAgentStatus(status?.status || null);
+          if (status?.status && status.status !== "idle") {
+            setAgentStatus(status.status);
+          }
         },
         onToolCall(toolCall, runId) {
+          const msgId = runId ? `assistant-${runId}` : "assistant-default";
           setMessages((prev) => {
             const msgs = [...prev];
-            const currentRunId = runId || "default";
-            let msgId = runIdToMessageId[currentRunId];
+            const idx = msgs.findIndex((m) => m.id === msgId);
+            const newToolCall = {
+              id: `tool-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              name: toolCall.name,
+              args: toolCall.args,
+            };
 
-            if (!msgId) {
-              msgId = `assistant-${Date.now()}-${currentRunId}`;
-              runIdToMessageId[currentRunId] = msgId;
+            if (idx === -1) {
               msgs.push({
                 id: msgId,
                 role: "assistant",
                 content: "",
                 timestamp: new Date(),
-                toolCalls: [{ id: `tool-${Date.now()}`, name: toolCall.name, args: toolCall.args }],
+                toolCalls: [newToolCall],
               });
             } else {
-              const idx = msgs.findIndex(m => m.id === msgId);
-              if (idx !== -1) {
-                msgs[idx] = { 
-                  ...msgs[idx], 
-                  toolCalls: [...(msgs[idx].toolCalls || []), { id: `tool-${Date.now()}`, name: toolCall.name, args: toolCall.args }] 
-                };
-              }
+              msgs[idx] = {
+                ...msgs[idx],
+                toolCalls: [...(msgs[idx].toolCalls || []), newToolCall],
+              };
+            }
+            return msgs;
+          });
+        },
+        onToolResult(toolResult) {
+          setMessages((prev) => {
+            const msgs = [...prev];
+            // Find the assistant message that contains the corresponding tool call
+            const msgIdx = msgs.findIndex((m) =>
+              m.toolCalls?.some((tc) => tc.id === toolResult.tool_call_id || tc.name === toolResult.tool_call_id)
+            );
+
+            // Fallback to the last assistant message if not found by ID
+            const targetIdx = msgIdx !== -1 ? msgIdx : msgs.map(m => m.role).lastIndexOf("assistant");
+
+            if (targetIdx !== -1) {
+              const toolResults = msgs[targetIdx].toolResults || [];
+              msgs[targetIdx] = {
+                ...msgs[targetIdx],
+                toolResults: [
+                  ...toolResults,
+                  { toolCallId: toolResult.tool_call_id, result: toolResult.result },
+                ],
+              };
             }
             return msgs;
           });
@@ -137,12 +156,6 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
         </div>
         
         <div className="flex items-center gap-4">
-          {agentStatus && agentStatus !== "idle" && (
-            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-surface-card border border-hairline text-xs font-medium text-muted">
-              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
-              {agentStatus}
-            </div>
-          )}
           <button
             onClick={async () => {
               try {
@@ -165,7 +178,7 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
         </div>
       )}
 
-      <MessageList messages={messages} isLoading={isLoading} />
+      <MessageList messages={messages} isLoading={isLoading} agentStatus={agentStatus} />
       
       <ChatInput onSubmit={handleSendMessage} isLoading={isLoading} />
     </div>

@@ -20,7 +20,7 @@ from pydantic import BaseModel
 from psycopg_pool import AsyncConnectionPool
 from psycopg.rows import dict_row
 from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
-from langchain_core.messages import HumanMessage, AIMessage
+from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
 from agent.graph import build_graph
 from config import get_settings
@@ -131,27 +131,47 @@ async def chat_endpoint(session_id: str, payload: ChatRequest, request: Request)
     
     async def event_generator():
         current_status = "idle"
+        streamed_run_ids = set()
         
         try:
             async for event in graph.astream_events(turn_input, config=config, version="v2"):
                 event_name = event.get("event")
                 event_data = event.get("data") or {}
+                # logger.info(f"Event: {event_name}") # Too noisy
 
                 # Streamed text chunks from the chat model
                 if event_name == "on_chat_model_stream":
+                    tags = event.get("tags") or []
+                    if "main_llm" not in tags:
+                        continue
+
+                    run_id = event.get("run_id")
+                    if run_id:
+                        streamed_run_ids.add(run_id)
+                        
                     chunk = event_data.get("chunk")
                     text = _chunk_text(chunk)
                     if text:
-                        yield f"event: message\ndata: {json.dumps({'text': text, 'run_id': event.get('run_id')})}\n\n"
+                        yield f"event: message\ndata: {json.dumps({'text': text, 'run_id': run_id})}\n\n"
 
                 # Detect when a model ends (handles non-streaming or final sync)
                 if event_name == "on_chat_model_end":
+                    tags = event.get("tags") or []
+                    if "main_llm" not in tags:
+                        continue
+                        
                     output = event_data.get("output")
                     if isinstance(output, AIMessage):
-                        # ...
+                        # Yield content if present (fallback for non-streaming or final sync)
+                        run_id = event.get("run_id")
+                        if run_id not in streamed_run_ids:
+                            text = _chunk_text(output)
+                            if text:
+                                yield f"event: message\ndata: {json.dumps({'text': text, 'run_id': run_id})}\n\n"
+                            
                         if output.tool_calls:
                             for call in output.tool_calls:
-                                yield f"event: tool_call\ndata: {json.dumps({'name': call.get('name'), 'args': call.get('args'), 'run_id': event.get('run_id')})}\n\n"
+                                yield f"event: tool_call\ndata: {json.dumps({'name': call.get('name'), 'args': call.get('args'), 'run_id': run_id, 'id': call.get('id')})}\n\n"
 
                 # Capture state updates for status
                 if event_name == "on_chain_stream":
@@ -165,6 +185,13 @@ async def chat_endpoint(session_id: str, payload: ChatRequest, request: Request)
                                 if next_status and next_status != current_status:
                                     current_status = next_status
                                     yield f"event: status\ndata: {json.dumps({'status': current_status})}\n\n"
+                                
+                                # Yield tool results if present
+                                messages = node_output.get("messages")
+                                if messages:
+                                    for msg in messages:
+                                        if isinstance(msg, ToolMessage):
+                                            yield f"event: tool_result\ndata: {json.dumps({'tool_call_id': msg.tool_call_id, 'result': msg.content})}\n\n"
 
                 # Fallback for status updates at end of nodes
                 if event_name in {"on_chain_end", "on_tool_end"}:

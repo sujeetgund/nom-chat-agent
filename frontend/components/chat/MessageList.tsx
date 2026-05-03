@@ -5,9 +5,10 @@ import { useEffect, useRef } from "react";
 interface MessageListProps {
   messages: Message[];
   isLoading: boolean;
+  agentStatus: string | null;
 }
 
-export function MessageList({ messages, isLoading }: MessageListProps) {
+export function MessageList({ messages, isLoading, agentStatus }: MessageListProps) {
   const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -37,7 +38,7 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
           <MessageComponent key={message.id} message={message} />
         ))}
         {isLoading && (messages.length === 0 || messages[messages.length - 1]?.role !== "assistant") && (
-          <div className="flex justify-start mb-8 animate-pulse">
+          <div className="flex justify-start mb-8 animate-pulse items-center gap-3">
             <div className="bg-surface-dark w-16 h-12 rounded-xl flex items-center justify-center shadow-md">
               <div className="flex space-x-1.5">
                 <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
@@ -45,6 +46,11 @@ export function MessageList({ messages, isLoading }: MessageListProps) {
                 <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
               </div>
             </div>
+            {agentStatus && (
+              <span className="text-xs font-medium text-muted bg-surface-card border border-hairline px-3 py-1 rounded-full capitalize">
+                {agentStatus.replace(/_/g, ' ')}
+              </span>
+            )}
           </div>
         )}
         <div ref={bottomRef} className="h-4" />
