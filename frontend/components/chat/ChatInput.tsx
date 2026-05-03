@@ -46,11 +46,7 @@ export function ChatInput({ onSubmit, isLoading }: ChatInputProps) {
           rows={1}
           disabled={isLoading}
         />
-        <div className="flex items-center justify-between px-3 pb-3">
-          <div className="text-xs text-muted-soft font-medium flex items-center gap-1.5 ml-2">
-            <span className="w-1.5 h-1.5 rounded-full bg-success"></span>
-            NOM is ready
-          </div>
+        <div className="flex items-center justify-end px-3 pb-3">
           <button
             onClick={handleSubmit}
             disabled={!input.trim() || isLoading}

@@ -67,11 +67,11 @@ def _chunk_to_ai_message(chunk: Any) -> AIMessage:
     )
 
 
-async def _extract_user_name(text: str) -> str | None:
+def _extract_user_name(text: str) -> str | None:
     extractor = get_chat_model().with_structured_output(
         NameExtraction, method="json_schema"
     )
-    result = await extractor.ainvoke(
+    result = extractor.invoke(
         [
             SystemMessage(
                 content=(
@@ -86,7 +86,7 @@ async def _extract_user_name(text: str) -> str | None:
     return result.name.strip() if result.name else None
 
 
-async def agent_node(state: AgentState) -> dict[str, Any]:
+def agent_node(state: AgentState) -> dict[str, Any]:
     messages = list(state.get("messages", []))
     user_name = state.get("user_name")
 
@@ -101,7 +101,7 @@ async def agent_node(state: AgentState) -> dict[str, Any]:
         )
 
         if latest_human is not None:
-            extracted_name = await _extract_user_name(
+            extracted_name = _extract_user_name(
                 str(getattr(latest_human, "content", ""))
             )
             if extracted_name:
@@ -109,7 +109,7 @@ async def agent_node(state: AgentState) -> dict[str, Any]:
 
     llm = get_chat_model().bind_tools(list(TOOL_MAP.values()))
     prompt = build_agent_system_prompt(user_name)
-    response = await llm.ainvoke(
+    response = llm.invoke(
         [SystemMessage(content=prompt)] + messages,
         config={"tags": ["main_llm"]}
     )
@@ -137,7 +137,7 @@ def set_tool_status(state: AgentState) -> dict[str, str]:
     return {"agent_status": TOOL_STATUS_MAP.get(tool_name, "thinking")}
 
 
-async def tools_node(state: AgentState) -> dict[str, Any]:
+def tools_node(state: AgentState) -> dict[str, Any]:
     messages = list(state.get("messages", []))
     last_ai = _latest_ai_message(messages)
     tool_calls = list(getattr(last_ai, "tool_calls", []) or [])
@@ -158,7 +158,7 @@ async def tools_node(state: AgentState) -> dict[str, Any]:
             continue
 
         try:
-            result = await tool_fn.ainvoke(tool_args)
+            result = tool_fn.invoke(tool_args)
         except Exception as exc:  # pragma: no cover - surfaced to the CLI
             result = f"Tool error: {exc}"
 

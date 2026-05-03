@@ -6,7 +6,7 @@ from langchain_core.tools import tool
 
 
 @tool
-async def draft_email(recipient: str, subject: str, body: str) -> str:
+def draft_email(recipient: str, subject: str, body: str) -> str:
     """Format an email draft for review."""
 
     return f"To: {recipient}\nSubject: {subject}\n\n{body}"

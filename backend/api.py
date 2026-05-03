@@ -4,22 +4,13 @@ import json
 import logging
 import sys
 import asyncio
-
-# On Windows, psycopg requires the SelectorEventLoop
-if sys.platform == "win32":
-    try:
-        from asyncio import WindowsSelectorEventLoopPolicy
-        asyncio.set_event_loop_policy(WindowsSelectorEventLoopPolicy())
-    except Exception:
-        pass
+from datetime import datetime
 
 from fastapi import FastAPI, Request
 from fastapi.responses import StreamingResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from psycopg_pool import AsyncConnectionPool
-from psycopg.rows import dict_row
-from langgraph.checkpoint.postgres.aio import AsyncPostgresSaver
+from langgraph.checkpoint.postgres import PostgresSaver
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
 from agent.graph import build_graph
@@ -32,29 +23,10 @@ settings = get_settings()
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator:
-    connection_kwargs = {
-        "autocommit": True,
-        "prepare_threshold": 0,
-        "row_factory": dict_row,
-    }
-    async with AsyncConnectionPool(
-        settings.database_url, 
-        kwargs=connection_kwargs,
-        min_size=1,
-        max_size=10,
-        max_idle=300,
-    ) as pool:
-        await pool.wait()
-        checkpointer = AsyncPostgresSaver(pool)
-        logger.info("Setting up the checkpoint db.")
-        await checkpointer.setup()  # run only the first time
-        
-        # Store in app state
-        app.state.checkpointer = checkpointer
-        app.state.graph = build_graph(checkpointer)
-        
-        yield {"checkpointer": checkpointer}
-        logger.info("Closing the connection pool.")
+    # Build graph once at startup. The factory handles the checkpointer.
+    app.state.graph = build_graph()
+    yield
+    logger.info("Shutting down NOM Chat API.")
 
 app = FastAPI(lifespan=lifespan, title="NOM Chat API")
 
@@ -84,38 +56,26 @@ def _chunk_text(chunk: Any) -> str:
     return str(content)
 
 def serialize_message(message: Any) -> dict[str, Any]:
-    """Helper to serialize messages to JSON-friendly dicts."""
-    if hasattr(message, "to_json"):
-        # Some LangChain messages have to_json
-        try:
-            data = message.to_json()
-            if "kwargs" in data:
-                return {
-                    "type": data.get("id", [""])[-1].lower().replace("message", ""),
-                    "content": data["kwargs"].get("content", ""),
-                    "tool_calls": data["kwargs"].get("tool_calls", [])
-                }
-        except:
-            pass
-
-    if isinstance(message, dict):
-        return message
-
+    """Helper to serialize messages to JSON-friendly dicts compatible with the frontend."""
     content = getattr(message, "content", str(message))
-    if isinstance(message, AIMessage):
-        type_str = "ai"
-    elif isinstance(message, HumanMessage):
-        type_str = "human"
-    elif isinstance(message, ToolMessage):
-        type_str = "tool"
-    elif isinstance(message, SystemMessage):
-        type_str = "system"
-    else:
-        type_str = "unknown"
     
-    res = {"type": type_str, "content": content}
+    if isinstance(message, AIMessage):
+        role = "assistant"
+    elif isinstance(message, HumanMessage):
+        role = "user"
+    else:
+        role = "assistant" # Fallback
+    
+    res = {
+        "id": getattr(message, "id", f"msg-{id(message)}"),
+        "role": role, 
+        "content": content,
+        "timestamp": datetime.now().isoformat() # Fallback timestamp
+    }
+    
     if hasattr(message, "tool_calls"):
-        res["tool_calls"] = message.tool_calls
+        res["toolCalls"] = message.tool_calls
+        
     return res
 
 @app.post("/chat/{session_id}")
@@ -130,83 +90,50 @@ async def chat_endpoint(session_id: str, payload: ChatRequest, request: Request)
     }
     
     async def event_generator():
-        current_status = "idle"
-        streamed_run_ids = set()
-        
         try:
-            async for event in graph.astream_events(turn_input, config=config, version="v2"):
-                event_name = event.get("event")
-                event_data = event.get("data") or {}
-                # logger.info(f"Event: {event_name}") # Too noisy
+            # Run the graph synchronously in a thread pool to avoid async DB overhead/errors
+            loop = asyncio.get_running_loop()
+            final_state = await loop.run_in_executor(
+                None, 
+                lambda: graph.invoke(turn_input, config=config)
+            )
+            
+            # Extract the last AI message
+            messages = final_state.get("messages", [])
+            last_ai = next((m for m in reversed(messages) if isinstance(m, AIMessage)), None)
+            
+            if not last_ai:
+                yield f"event: error\ndata: {json.dumps({'detail': 'No response from agent'})}\n\n"
+                return
 
-                # Streamed text chunks from the chat model
-                if event_name == "on_chat_model_stream":
-                    tags = event.get("tags") or []
-                    if "main_llm" not in tags:
-                        continue
+            # Use message ID as run_id to ensure the frontend creates a new message block
+            run_id = getattr(last_ai, "id", None) or uuid4().hex
 
-                    run_id = event.get("run_id")
-                    if run_id:
-                        streamed_run_ids.add(run_id)
-                        
-                    chunk = event_data.get("chunk")
-                    text = _chunk_text(chunk)
-                    if text:
-                        yield f"event: message\ndata: {json.dumps({'text': text, 'run_id': run_id})}\n\n"
+            # 1. Yield tool calls if any
+            if hasattr(last_ai, "tool_calls") and last_ai.tool_calls:
+                for call in last_ai.tool_calls:
+                    yield f"event: tool_call\ndata: {json.dumps({'name': call.get('name'), 'args': call.get('args'), 'id': call.get('id'), 'run_id': run_id})}\n\n"
 
-                # Detect when a model ends (handles non-streaming or final sync)
-                if event_name == "on_chat_model_end":
-                    tags = event.get("tags") or []
-                    if "main_llm" not in tags:
-                        continue
-                        
-                    output = event_data.get("output")
-                    if isinstance(output, AIMessage):
-                        # Yield content if present (fallback for non-streaming or final sync)
-                        run_id = event.get("run_id")
-                        if run_id not in streamed_run_ids:
-                            text = _chunk_text(output)
-                            if text:
-                                yield f"event: message\ndata: {json.dumps({'text': text, 'run_id': run_id})}\n\n"
-                            
-                        if output.tool_calls:
-                            for call in output.tool_calls:
-                                yield f"event: tool_call\ndata: {json.dumps({'name': call.get('name'), 'args': call.get('args'), 'run_id': run_id, 'id': call.get('id')})}\n\n"
+            # 2. Yield tool results from the state
+            for msg in reversed(messages):
+                if isinstance(msg, ToolMessage):
+                    yield f"event: tool_result\ndata: {json.dumps({'tool_call_id': msg.tool_call_id, 'result': msg.content, 'run_id': run_id})}\n\n"
+                if isinstance(msg, AIMessage) and msg == last_ai:
+                    break # Only get tools for the CURRENT turn
 
-                # Capture state updates for status
-                if event_name == "on_chain_stream":
-                    # This yields the intermediate state chunks
-                    if isinstance(event_data, dict) and "chunk" in event_data:
-                        chunk = event_data["chunk"]
-                        # LangGraph chunks are often dicts of node outputs
-                        for node_output in chunk.values():
-                            if isinstance(node_output, dict):
-                                next_status = node_output.get("agent_status")
-                                if next_status and next_status != current_status:
-                                    current_status = next_status
-                                    yield f"event: status\ndata: {json.dumps({'status': current_status})}\n\n"
-                                
-                                # Yield tool results if present
-                                messages = node_output.get("messages")
-                                if messages:
-                                    for msg in messages:
-                                        if isinstance(msg, ToolMessage):
-                                            yield f"event: tool_result\ndata: {json.dumps({'tool_call_id': msg.tool_call_id, 'result': msg.content})}\n\n"
+            # 3. Stream the text content in chunks (simulated streaming)
+            content = _chunk_text(last_ai)
+            chunk_size = 8
+            for i in range(0, len(content), chunk_size):
+                chunk = content[i : i + chunk_size]
+                yield f"event: message\ndata: {json.dumps({'text': chunk, 'run_id': run_id})}\n\n"
+                await asyncio.sleep(0.01) # Simulated pacing
 
-                # Fallback for status updates at end of nodes
-                if event_name in {"on_chain_end", "on_tool_end"}:
-                    output = event_data.get("output")
-                    if isinstance(output, dict):
-                        next_status = output.get("agent_status")
-                        if next_status and next_status != current_status:
-                            current_status = next_status
-                            yield f"event: status\ndata: {json.dumps({'status': current_status})}\n\n"
-                                    
-            # Reset status to idle when done
+            # 4. Final status reset
             yield f"event: status\ndata: {json.dumps({'status': 'idle'})}\n\n"
             
         except Exception as e:
-            logger.error(f"Error in chat stream: {e}", exc_info=True)
+            logger.error(f"Error in chat execution: {e}", exc_info=True)
             yield f"event: error\ndata: {json.dumps({'detail': str(e)})}\n\n"
 
     return StreamingResponse(event_generator(), media_type="text/event-stream")
@@ -217,15 +144,23 @@ async def chat_history(session_id: str, request: Request):
     config = {"configurable": {"thread_id": session_id}}
     
     try:
-        snapshot = await graph.aget_state(config)
+        # Use synchronous get_state in a thread pool to match our checkpointer
+        loop = asyncio.get_running_loop()
+        snapshot = await loop.run_in_executor(
+            None,
+            lambda: graph.get_state(config)
+        )
+        
         messages = list((snapshot.values or {}).get("messages", []))
         
-        serialized_messages = [serialize_message(m) for m in messages]
-        return {"session_id": session_id, "messages": serialized_messages}
+        # Filter out ToolMessages and SystemMessages for the UI
+        ui_messages = [
+            serialize_message(m) 
+            for m in messages 
+            if isinstance(m, (HumanMessage, AIMessage))
+        ]
+        
+        return {"session_id": session_id, "messages": ui_messages}
     except Exception as e:
-        logger.error(f"Error getting history: {e}")
+        logger.error(f"Error getting history: {e}", exc_info=True)
         return {"session_id": session_id, "messages": []}
-
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run("api:app", host="0.0.0.0", port=8000, loop="none")

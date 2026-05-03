@@ -30,7 +30,7 @@ Do NOT include a cost estimate section; it will be added separately.
 
 
 @tool
-async def generate_proposal(requirements: str, research: str = "") -> str:
+def generate_proposal(requirements: str, research: str = "") -> str:
     """Generate a structured project proposal as a markdown artifact (saved to artifacts/).
 
     Args:
@@ -43,7 +43,7 @@ async def generate_proposal(requirements: str, research: str = "") -> str:
     llm = get_chat_model()
 
     # Generate proposal content
-    response = await llm.ainvoke(
+    response = llm.invoke(
         [
             SystemMessage(content=PROPOSAL_SYSTEM_PROMPT),
             HumanMessage(
@@ -68,8 +68,6 @@ async def generate_proposal(requirements: str, research: str = "") -> str:
     project_name = requirements.split("\n")[0][:40] or "project"
 
     # Write artifact
-    filepath, rel_path = await asyncio.to_thread(
-        _create_artifact, full_content, project_name, "proposal"
-    )
+    filepath, rel_path = _create_artifact(full_content, project_name, "proposal")
 
     return f"✓ Proposal created: {rel_path}\n\nRetrieve this file to review the full proposal."

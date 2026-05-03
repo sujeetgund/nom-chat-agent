@@ -65,7 +65,7 @@ def estimate_project_cost(requirements: str) -> CostEstimate:
 
 
 @tool
-async def estimate_cost(requirements: str) -> str:
+def estimate_cost(requirements: str) -> str:
     """Estimate delivery effort and cost from a project brief."""
 
     estimate = estimate_project_cost(requirements)

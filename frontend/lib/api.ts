@@ -1,9 +1,8 @@
 import { ChatRequest, ChatResponse, Message } from "./types";
 
-const BACKEND_URL =
-  process.env.NEXT_PUBLIC_BACKEND_BASE_URL || "http://localhost:8000";
+const BACKEND_URL = "/api";
 
-// Since backend does not require session creation, we'll generate UUID locally.
+// Generate UUID locally.
 export async function createNewSession(): Promise<string> {
   return crypto.randomUUID();
 }
@@ -132,18 +131,17 @@ export async function getSessionHistory(sessionId: string): Promise<Message[]> {
 
   const data = await response.json();
   
-  // Transform the history to the frontend Message type format
-  return (data.messages || [])
-    .filter((m: any) => m.type === "ai" || m.type === "human")
-    .map((m: any, i: number) => ({
-      id: `msg-${i}-${Date.now()}`,
-      role: m.type === "ai" ? "assistant" : "user",
-      content: m.content || "",
-      timestamp: new Date(),
-      toolCalls: (m.tool_calls || []).map((tc: any) => ({
-        id: tc.id || `tool-${Math.random()}`,
-        name: tc.name || "",
-        args: tc.args || {}
-      })),
-    }));
+  // The backend now sends role: "user" | "assistant" and toolCalls directly
+  return (data.messages || []).map((m: any) => ({
+    id: m.id || `msg-${Math.random()}`,
+    role: m.role,
+    content: m.content || "",
+    timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
+    toolCalls: (m.toolCalls || []).map((tc: any) => ({
+      id: tc.id || `tool-${Math.random()}`,
+      name: tc.name || "",
+      args: tc.args || {}
+    })),
+    toolResults: m.toolResults || []
+  }));
 }
