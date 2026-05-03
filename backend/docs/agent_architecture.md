@@ -88,9 +88,6 @@ class AgentState(MessagesState):
 | `generate_prd` | User requests a PRD | `writing_prd` |
 | `research` | Agent finds a need to research a topic on web before replying  | `researching` |
 
-> **Note on web search:** Out of scope for v1. All research is grounded in the
-website's knowledge base only. Add a `web_search` tool in v2 if needed.
-> 
 
 ### Tool Status Update Pattern
 
@@ -185,62 +182,9 @@ CREATE INDEX ON website_embeddings
 ## API Design
 
 ```
-POST /chat/session          → Create new session, returns session_id (thread_id)
-GET  /chat/{session_id}     → SSE stream: send message, receive streamed reply
+POST /chat/{session_id}     → SSE stream: send message, receive streamed reply
 GET  /chat/{session_id}/history  → Return full message history for UI restore
 ```
-
----
-
-## Folder Structure
-
-```
-app/
-├── agent/
-│   ├── graph.py          # LangGraph graph definition (2 nodes)
-│   ├── state.py          # AgentState schema
-│   ├── tools/
-│   │   ├── rag.py        # rag_search tool
-│   │   ├── proposal.py   # generate_proposal tool
-│   │   ├── prd.py        # generate_prd tool
-│   │   └── estimate.py   # estimate_cost tool
-│   └── prompts.py        # System prompt with user_name injection
-├── api/
-│   ├── chat.py           # FastAPI SSE endpoint
-│   └── session.py        # Session creation
-├── rag/
-│   ├── embedder.py       # Embed and upsert website content
-│   └── retriever.py      # pgvector similarity search
-└── db/
-    ├── postgres.py       # Async Postgres connection
-    └── checkpointer.py   # PostgresSaver setup
-```
-
----
-
-## Build Phases
-
-### Phase 1 — Core Agent (Week 1)
-
-- [x]  LangGraph 2-node graph with `AgentState`
-- [ ]  `rag_search` tool + pgvector setup
-- [x]  `PostgresSaver` checkpointer
-- [ ]  FastAPI SSE endpoint
-- [x]  User name capture flow via system prompt
-
-### Phase 2 — Document Generation (Week 2)
-
-- [ ]  `generate_proposal` tool with structured output
-- [ ]  `generate_prd` tool with structured output
-- [ ]  `estimate_cost` tool (rule-based + LLM hybrid)
-- [ ]  `agent_status` streaming to frontend
-
-### Phase 3 — Content & Polish (Week 3)
-
-- [ ]  Ingest all website content into pgvector
-- [ ]  Metadata filtering (search only blogs, or only services, etc.)
-- [ ]  Frontend status badge component
-- [ ]  Session restore on page reload
 
 ---
 

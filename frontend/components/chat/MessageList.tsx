@@ -1,59 +1,54 @@
-"use client";
-
 import { Message } from "@/lib/types";
 import { MessageComponent } from "./Message";
 import { useEffect, useRef } from "react";
 
 interface MessageListProps {
   messages: Message[];
-  isLoading?: boolean;
+  isLoading: boolean;
 }
 
 export function MessageList({ messages, isLoading }: MessageListProps) {
-  const messagesEndRef = useRef<HTMLDivElement>(null);
+  const bottomRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    bottomRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages, isLoading]);
 
-  return (
-    <div className="flex-1 overflow-y-auto p-6 space-y-4 bg-gradient-to-b from-slate-50 to-white dark:from-slate-950 dark:to-slate-900">
-      {messages.length === 0 ? (
-        <div className="flex h-full items-center justify-center">
-          <div className="text-center">
-            <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">
-              NOM Chat Agent
-            </h2>
-            <p className="text-slate-600 dark:text-slate-400">
-              Start a conversation to get help with your business needs.
-            </p>
-          </div>
+  if (messages.length === 0) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-8 text-center bg-canvas">
+        <div className="w-16 h-16 bg-surface-card rounded-full flex items-center justify-center mb-6 shadow-sm border border-hairline">
+          <span className="text-3xl text-primary">✱</span>
         </div>
-      ) : (
-        <>
-          {messages.map((message) => (
-            <MessageComponent key={message.id} message={message} />
-          ))}
-          {isLoading && (
-            <div className="flex justify-start mb-4">
-              <div className="bg-slate-100 dark:bg-slate-800 rounded-lg rounded-bl-none px-4 py-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-2 h-2 bg-slate-400 rounded-full animate-bounce" />
-                  <div
-                    className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
-                    style={{ animationDelay: "0.2s" }}
-                  />
-                  <div
-                    className="w-2 h-2 bg-slate-400 rounded-full animate-bounce"
-                    style={{ animationDelay: "0.4s" }}
-                  />
-                </div>
+        <h2 className="text-2xl font-serif text-ink tracking-tight mb-3">
+          How can I help you today?
+        </h2>
+        <p className="text-muted text-base max-w-sm">
+          Ask me to analyze data, write code, or solve complex problems.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex-1 overflow-y-auto px-6 py-8 bg-canvas pb-40">
+      <div className="max-w-4xl mx-auto flex flex-col w-full">
+        {messages.map((message) => (
+          <MessageComponent key={message.id} message={message} />
+        ))}
+        {isLoading && (messages.length === 0 || messages[messages.length - 1]?.role !== "assistant") && (
+          <div className="flex justify-start mb-8 animate-pulse">
+            <div className="bg-surface-dark w-16 h-12 rounded-xl flex items-center justify-center shadow-md">
+              <div className="flex space-x-1.5">
+                <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
+                <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
+                <div className="w-1.5 h-1.5 bg-primary rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
               </div>
             </div>
-          )}
-        </>
-      )}
-      <div ref={messagesEndRef} />
+          </div>
+        )}
+        <div ref={bottomRef} className="h-4" />
+      </div>
     </div>
   );
 }

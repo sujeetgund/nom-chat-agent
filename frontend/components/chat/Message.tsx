@@ -1,8 +1,7 @@
-"use client";
-
 import { Message } from "@/lib/types";
 import { MarkdownContent } from "@/components/markdown/MarkdownContent";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
+import { ArtifactModal } from "./ArtifactModal";
 
 interface MessageProps {
   message: Message;
@@ -11,6 +10,7 @@ interface MessageProps {
 export function MessageComponent({ message }: MessageProps) {
   const isUser = message.role === "user";
   const contentRef = useRef<HTMLDivElement>(null);
+  const [selectedArtifact, setSelectedArtifact] = useState<any>(null);
 
   useEffect(() => {
     if (contentRef.current) {
@@ -21,41 +21,60 @@ export function MessageComponent({ message }: MessageProps) {
   return (
     <div
       ref={contentRef}
-      className={`flex ${isUser ? "justify-end" : "justify-start"} mb-4 animate-in`}
+      className={`flex ${isUser ? "justify-end" : "justify-start"} mb-8 animate-in`}
     >
       <div
-        className={`max-w-2xl rounded-lg px-4 py-3 ${
+        className={`max-w-3xl w-full rounded-xl px-6 py-5 ${
           isUser
-            ? "bg-[#cc785c] text-white rounded-br-none"
-            : "bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-none border border-slate-200 dark:border-slate-700"
+            ? "bg-surface-card text-ink border border-hairline rounded-tr-none ml-12"
+            : "bg-surface-dark text-on-dark rounded-tl-none mr-12 shadow-md"
         }`}
       >
-        <div className="prose prose-sm dark:prose-invert max-w-none">
+        {!isUser && (
+          <div className="flex items-center gap-2 mb-4 border-b border-surface-dark-soft pb-3">
+            <span className="text-primary font-bold text-lg leading-none">✱</span>
+            <span className="text-on-dark-soft text-sm font-medium">NOM Assistant</span>
+          </div>
+        )}
+        <div className={`prose prose-sm max-w-none ${isUser ? "prose-slate" : "prose-invert"}`}>
           {isUser ? (
-            <p className="m-0 whitespace-pre-wrap">{message.content}</p>
+            <p className="m-0 whitespace-pre-wrap text-base">{message.content}</p>
           ) : (
             <MarkdownContent content={message.content} />
           )}
         </div>
 
         {message.toolCalls && message.toolCalls.length > 0 && (
-          <div className="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-            <p className="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2">
-              Tools used:
+          <div className="mt-6 pt-4 border-t border-surface-dark-soft">
+            <p className="text-xs font-semibold text-on-dark-soft uppercase tracking-widest mb-3">
+              Generated Artifacts
             </p>
-            {message.toolCalls.map((tool) => (
-              <div
-                key={tool.id}
-                className="text-xs bg-slate-50 dark:bg-slate-900 p-2 rounded mb-2"
-              >
-                <p className="font-mono text-slate-600 dark:text-slate-300">
+            <div className="flex flex-wrap gap-2">
+              {message.toolCalls.map((tool) => (
+                <button
+                  key={tool.id}
+                  onClick={() => setSelectedArtifact(tool)}
+                  className="text-xs bg-surface-dark-elevated text-on-dark px-3 py-1.5 rounded-md border border-surface-dark-soft hover:bg-primary hover:text-on-primary transition-colors flex items-center gap-2"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-accent-amber"></span>
                   {tool.name}
-                </p>
-              </div>
-            ))}
+                  <svg className="ml-1" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="15 3 21 3 21 9"></polyline>
+                    <line x1="10" y1="14" x2="21" y2="3"></line>
+                  </svg>
+                </button>
+              ))}
+            </div>
           </div>
         )}
       </div>
+
+      {selectedArtifact && (
+        <ArtifactModal 
+          toolCall={selectedArtifact} 
+          onClose={() => setSelectedArtifact(null)} 
+        />
+      )}
     </div>
   );
 }

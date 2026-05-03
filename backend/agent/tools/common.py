@@ -15,5 +15,5 @@ def get_chat_model() -> ChatOpenAI:
         model=settings.openai_llm_model,
         temperature=0.2,
         api_key=api_key,
-        streaming=False,
+        streaming=True,
     )

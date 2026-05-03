@@ -18,14 +18,13 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
 
   const router = useRouter();
 
-  // Fetch session history on mount
   useEffect(() => {
     const fetchHistory = async () => {
       try {
         const history = await getSessionHistory(sessionId);
         setMessages(history || []);
       } catch (err) {
-        setError("Failed to fetch session history.");
+        setError("Failed to fetch session history. Backend might be down.");
         console.error(err);
       }
     };
@@ -41,7 +40,6 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
       return;
     }
 
-    // Add user message to UI optimistically
     const userMsg: Message = {
       id: `user-${Date.now()}`,
       role: "user",
@@ -53,33 +51,65 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
     setIsLoading(true);
     setError(null);
 
-    // Create an assistant placeholder that we'll stream tokens into
-    const assistantId = `assistant-${Date.now()}`;
-    const assistantPlaceholder: Message = {
-      id: assistantId,
-      role: "assistant",
-      content: "",
-      timestamp: new Date(),
-    };
-
-    setMessages((prev) => [...prev, assistantPlaceholder]);
+    const runIdToMessageId: Record<string, string> = {};
 
     try {
       await sendMessage(sessionId, userMessage, {
-        onToken(token) {
+        onToken(token, runId) {
           setMessages((prev) => {
             const msgs = [...prev];
-            for (let i = msgs.length - 1; i >= 0; i--) {
-              if (msgs[i].id === assistantId) {
-                msgs[i] = { ...msgs[i], content: msgs[i].content + token };
-                break;
+            const currentRunId = runId || "default";
+            let msgId = runIdToMessageId[currentRunId];
+
+            if (!msgId) {
+              msgId = `assistant-${Date.now()}-${currentRunId}`;
+              runIdToMessageId[currentRunId] = msgId;
+              msgs.push({
+                id: msgId,
+                role: "assistant",
+                content: token,
+                timestamp: new Date(),
+                toolCalls: [],
+              });
+            } else {
+              const idx = msgs.findIndex(m => m.id === msgId);
+              if (idx !== -1) {
+                msgs[idx] = { ...msgs[idx], content: msgs[idx].content + token };
               }
             }
             return msgs;
           });
         },
         onStatus(status) {
-          setAgentStatus(status?.message || status?.status || null);
+          setAgentStatus(status?.status || null);
+        },
+        onToolCall(toolCall, runId) {
+          setMessages((prev) => {
+            const msgs = [...prev];
+            const currentRunId = runId || "default";
+            let msgId = runIdToMessageId[currentRunId];
+
+            if (!msgId) {
+              msgId = `assistant-${Date.now()}-${currentRunId}`;
+              runIdToMessageId[currentRunId] = msgId;
+              msgs.push({
+                id: msgId,
+                role: "assistant",
+                content: "",
+                timestamp: new Date(),
+                toolCalls: [{ id: `tool-${Date.now()}`, name: toolCall.name, args: toolCall.args }],
+              });
+            } else {
+              const idx = msgs.findIndex(m => m.id === msgId);
+              if (idx !== -1) {
+                msgs[idx] = { 
+                  ...msgs[idx], 
+                  toolCalls: [...(msgs[idx].toolCalls || []), { id: `tool-${Date.now()}`, name: toolCall.name, args: toolCall.args }] 
+                };
+              }
+            }
+            return msgs;
+          });
         },
         onDone() {
           setIsLoading(false);
@@ -92,32 +122,27 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
       setError(errorMessage);
       console.error(err);
       setIsLoading(false);
+      setAgentStatus(null);
     }
   };
 
   return (
-    <div className="flex flex-col h-screen bg-white dark:bg-slate-950">
-      <header className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 px-6 py-4">
-        <div className="max-w-4xl mx-auto flex items-center justify-between">
-          <div>
-            <h1 
-              className="text-2xl font-bold text-slate-900 dark:text-white cursor-pointer hover:opacity-80 transition-opacity" 
-              onClick={() => router.push('/')}
-            >
-              NOM Chat Agent
-            </h1>
-            <div className="flex items-center gap-3 mt-1">
-              <p className="text-sm text-slate-600 dark:text-slate-400">
-                Session: {sessionId.slice(0, 8)}...
-              </p>
-              {agentStatus ? (
-                <span className="px-2 py-1 text-xs rounded-full bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200 flex items-center gap-2 animate-pulse border border-blue-200 dark:border-blue-800">
-                  <span className="w-2 h-2 rounded-full bg-blue-600 dark:bg-blue-400"></span>
-                  {agentStatus}
-                </span>
-              ) : null}
+    <div className="flex flex-col h-screen bg-canvas font-sans text-ink relative">
+      <header className="h-16 border-b border-hairline flex items-center justify-between px-6 bg-canvas/80 backdrop-blur-sm z-10 sticky top-0 shrink-0">
+        <div 
+          className="font-serif text-xl font-bold tracking-tight cursor-pointer hover:text-primary transition-colors flex items-center gap-2"
+          onClick={() => router.push('/')}
+        >
+          <span className="text-lg">✱</span> NOM Chat
+        </div>
+        
+        <div className="flex items-center gap-4">
+          {agentStatus && agentStatus !== "idle" && (
+            <div className="flex items-center gap-2 px-3 py-1 rounded-full bg-surface-card border border-hairline text-xs font-medium text-muted">
+              <span className="w-1.5 h-1.5 rounded-full bg-primary animate-pulse"></span>
+              {agentStatus}
             </div>
-          </div>
+          )}
           <button
             onClick={async () => {
               try {
@@ -127,7 +152,7 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
                 setError("Failed to create session");
               }
             }}
-            className="inline-flex items-center gap-2 bg-green-600 hover:bg-green-700 transition-colors text-white px-3 py-1 rounded-md text-sm"
+            className="text-sm font-medium hover:text-primary transition-colors border border-hairline px-3 py-1.5 rounded-md hover:bg-surface-card"
           >
             New Chat
           </button>
@@ -135,17 +160,14 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
       </header>
 
       {error && (
-        <div className="bg-red-50 dark:bg-red-900 border-b border-red-200 dark:border-red-800 px-6 py-3">
-          <div className="max-w-4xl mx-auto">
-            <p className="text-sm text-red-800 dark:text-red-200">{error}</p>
-          </div>
+        <div className="bg-error text-on-primary px-6 py-3 text-sm font-medium text-center shrink-0">
+          {error}
         </div>
       )}
 
-      <div className="max-w-4xl mx-auto w-full flex-1 flex flex-col overflow-hidden">
-        <MessageList messages={messages} isLoading={isLoading} />
-        <ChatInput onSubmit={handleSendMessage} isLoading={isLoading} />
-      </div>
+      <MessageList messages={messages} isLoading={isLoading} />
+      
+      <ChatInput onSubmit={handleSendMessage} isLoading={isLoading} />
     </div>
   );
 }
