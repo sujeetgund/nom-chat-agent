@@ -2,7 +2,7 @@
 
 import { useState, useEffect, use } from "react";
 import { useRouter } from "next/navigation";
-import { Message } from "@/lib/types";
+import { Message, Artifact } from "@/lib/types";
 import { sendMessage, createNewSession, getSessionHistory } from "@/lib/api";
 import { MessageList } from "@/components/chat/MessageList";
 import { ChatInput } from "@/components/chat/ChatInput";
@@ -12,6 +12,7 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
   const sessionId = resolvedParams.sessionId;
 
   const [messages, setMessages] = useState<Message[]>([]);
+  const [artifacts, setArtifacts] = useState<Artifact[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [agentStatus, setAgentStatus] = useState<string | null>(null);
@@ -22,7 +23,25 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
     const fetchHistory = async () => {
       try {
         const history = await getSessionHistory(sessionId);
-        setMessages(history || []);
+        let loadedMessages = history.messages || [];
+        const loadedArtifacts = history.artifacts || [];
+
+        // Attach artifacts to the last assistant message so buttons render
+        if (loadedArtifacts.length > 0) {
+          const lastAssistantIdx = loadedMessages
+            .map((m) => m.role)
+            .lastIndexOf("assistant");
+          if (lastAssistantIdx !== -1) {
+            loadedMessages = [...loadedMessages];
+            loadedMessages[lastAssistantIdx] = {
+              ...loadedMessages[lastAssistantIdx],
+              artifacts: loadedArtifacts,
+            };
+          }
+        }
+
+        setMessages(loadedMessages);
+        setArtifacts(loadedArtifacts);
       } catch (err) {
         setError("Failed to fetch session history. Backend might be down.");
         console.error(err);
@@ -65,7 +84,6 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
                 role: "assistant",
                 content: token,
                 timestamp: new Date(),
-                toolCalls: [],
               });
             } else {
               msgs[idx] = { ...msgs[idx], content: msgs[idx].content + token };
@@ -76,55 +94,22 @@ export default function ChatPage({ params }: { params: Promise<{ sessionId: stri
         onStatus(status) {
           if (status?.status && status.status !== "idle") {
             setAgentStatus(status.status);
+          } else {
+            setAgentStatus(null);
           }
         },
-        onToolCall(toolCall, runId) {
-          const msgId = runId ? `assistant-${runId}` : "assistant-default";
+        onArtifact(artifact) {
+          // Add artifact to the session-level list
+          setArtifacts((prev) => [...prev, artifact]);
+          // Also attach it to the latest assistant message
           setMessages((prev) => {
             const msgs = [...prev];
-            const idx = msgs.findIndex((m) => m.id === msgId);
-            const newToolCall = {
-              id: `tool-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-              name: toolCall.name,
-              args: toolCall.args,
-            };
-
-            if (idx === -1) {
-              msgs.push({
-                id: msgId,
-                role: "assistant",
-                content: "",
-                timestamp: new Date(),
-                toolCalls: [newToolCall],
-              });
-            } else {
-              msgs[idx] = {
-                ...msgs[idx],
-                toolCalls: [...(msgs[idx].toolCalls || []), newToolCall],
-              };
-            }
-            return msgs;
-          });
-        },
-        onToolResult(toolResult) {
-          setMessages((prev) => {
-            const msgs = [...prev];
-            // Find the assistant message that contains the corresponding tool call
-            const msgIdx = msgs.findIndex((m) =>
-              m.toolCalls?.some((tc) => tc.id === toolResult.tool_call_id || tc.name === toolResult.tool_call_id)
-            );
-
-            // Fallback to the last assistant message if not found by ID
-            const targetIdx = msgIdx !== -1 ? msgIdx : msgs.map(m => m.role).lastIndexOf("assistant");
-
-            if (targetIdx !== -1) {
-              const toolResults = msgs[targetIdx].toolResults || [];
-              msgs[targetIdx] = {
-                ...msgs[targetIdx],
-                toolResults: [
-                  ...toolResults,
-                  { toolCallId: toolResult.tool_call_id, result: toolResult.result },
-                ],
+            const lastAssistantIdx = msgs.map(m => m.role).lastIndexOf("assistant");
+            if (lastAssistantIdx !== -1) {
+              const existing = msgs[lastAssistantIdx].artifacts || [];
+              msgs[lastAssistantIdx] = {
+                ...msgs[lastAssistantIdx],
+                artifacts: [...existing, artifact],
               };
             }
             return msgs;

@@ -4,7 +4,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Awaitable, Callable
+import json
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -20,30 +20,26 @@ from langchain_core.messages import (
 from .prompts import build_agent_system_prompt
 from .state import AgentState
 from .tools.common import get_chat_model
-from .tools.email import draft_email
-from .tools.estimate import estimate_cost
-from .tools.prd import generate_prd
-from .tools.proposal import generate_proposal
+from .tools.prd import generate_prd, generate_proposal
 from .tools.rag import rag_search
-from .tools.research import research
+from .tools.web_search import web_search
 
 TOOL_MAP = {
     "rag_search": rag_search,
-    "research": research,
+    "web_search": web_search,
     "generate_proposal": generate_proposal,
     "generate_prd": generate_prd,
-    "estimate_cost": estimate_cost,
-    "draft_email": draft_email,
 }
 
 TOOL_STATUS_MAP = {
-    "rag_search": "researching",
-    "research": "researching",
+    "rag_search": "searching_kb",
+    "web_search": "researching",
     "generate_proposal": "writing_proposal",
     "generate_prd": "writing_prd",
-    "estimate_cost": "thinking",
-    "draft_email": "thinking",
 }
+
+# Tools that produce artifacts (return JSON with artifact_url)
+ARTIFACT_TOOLS = {"generate_prd", "generate_proposal"}
 
 
 class NameExtraction(BaseModel):
@@ -55,16 +51,6 @@ def _latest_ai_message(messages: list[BaseMessage]) -> AIMessage | None:
         if isinstance(message, AIMessage):
             return message
     return None
-
-
-def _chunk_to_ai_message(chunk: Any) -> AIMessage:
-    return AIMessage(
-        content=getattr(chunk, "content", None),
-        additional_kwargs=dict(getattr(chunk, "additional_kwargs", {}) or {}),
-        response_metadata=dict(getattr(chunk, "response_metadata", {}) or {}),
-        tool_calls=list(getattr(chunk, "tool_calls", []) or []),
-        id=getattr(chunk, "id", None),
-    )
 
 
 def _extract_user_name(text: str) -> str | None:
@@ -143,6 +129,9 @@ def tools_node(state: AgentState) -> dict[str, Any]:
     tool_calls = list(getattr(last_ai, "tool_calls", []) or [])
 
     tool_messages: list[ToolMessage] = []
+    new_artifact_urls: list[str] = []
+    latest_artifact_url: str | None = None
+
     for tool_call in tool_calls:
         tool_name = tool_call.get("name", "")
         tool_args = tool_call.get("args", {})
@@ -159,19 +148,35 @@ def tools_node(state: AgentState) -> dict[str, Any]:
 
         try:
             result = tool_fn.invoke(tool_args)
-        except Exception as exc:  # pragma: no cover - surfaced to the CLI
+        except Exception as exc:  # pragma: no cover
             result = f"Tool error: {exc}"
+
+        # For artifact tools: parse the JSON, extract URL, pass clean message to agent
+        tool_message_content = result
+        if tool_name in ARTIFACT_TOOLS and isinstance(result, str):
+            try:
+                parsed = json.loads(result)
+                artifact_url = parsed.get("artifact_url")
+                if artifact_url:
+                    new_artifact_urls.append(artifact_url)
+                    latest_artifact_url = artifact_url
+                # Agent only sees the clean message, not the JSON
+                tool_message_content = parsed.get("message", result)
+            except (json.JSONDecodeError, AttributeError):
+                pass  # Not JSON, pass as-is
 
         tool_messages.append(
             ToolMessage(
-                content=result,
+                content=tool_message_content,
                 tool_call_id=tool_call.get("id", tool_name),
             )
         )
 
-    return {"messages": tool_messages, "agent_status": "idle"}
+    output: dict[str, Any] = {"messages": tool_messages, "agent_status": "idle"}
 
+    if new_artifact_urls:
+        output["artifacts"] = new_artifact_urls  # appended via operator.add
+    if latest_artifact_url:
+        output["current_artifact"] = latest_artifact_url  # overwritten (last wins)
 
-"""
-2 nodes architecture: agent and tools nodes
-"""
+    return output

@@ -1,4 +1,4 @@
-import { ChatRequest, ChatResponse, Message } from "./types";
+import { ChatResponse, Message, Artifact } from "./types";
 
 const BACKEND_URL = "/api";
 
@@ -9,9 +9,8 @@ export async function createNewSession(): Promise<string> {
 
 export type SendMessageOptions = {
   onToken?: (token: string, runId?: string) => void;
-  onStatus?: (status: { status: string; message?: string }) => void;
-  onToolCall?: (toolCall: { name: string; args: any }, runId?: string) => void;
-  onToolResult?: (toolResult: { tool_call_id: string; result: any }) => void;
+  onStatus?: (status: { status: string; node?: string }) => void;
+  onArtifact?: (artifact: Artifact) => void;
   onDone?: () => void;
 };
 
@@ -20,7 +19,7 @@ export function sendMessage(
   message: string,
   opts: SendMessageOptions = {},
 ): Promise<ChatResponse> {
-  const { onToken, onStatus, onToolCall, onToolResult, onDone } = opts;
+  const { onToken, onStatus, onArtifact, onDone } = opts;
 
   return new Promise<ChatResponse>(async (resolve, reject) => {
     try {
@@ -44,7 +43,6 @@ export function sendMessage(
       const decoder = new TextDecoder("utf-8");
       
       let assistantText = "";
-      let finalStatus = "idle";
       let buffer = "";
 
       while (true) {
@@ -79,12 +77,9 @@ export function sendMessage(
                 assistantText += token;
                 onToken?.(token, payload.run_id);
               } else if (eventType === "status") {
-                finalStatus = payload.status || finalStatus;
-                onStatus?.({ status: payload.status });
-              } else if (eventType === "tool_call") {
-                onToolCall?.(payload, payload.run_id);
-              } else if (eventType === "tool_result") {
-                onToolResult?.(payload);
+                onStatus?.({ status: payload.status, node: payload.node });
+              } else if (eventType === "artifact") {
+                onArtifact?.(payload as Artifact);
               } else if (eventType === "error") {
                 console.error("Backend stream error:", payload.detail);
               }
@@ -117,7 +112,7 @@ export function sendMessage(
   });
 }
 
-export async function getSessionHistory(sessionId: string): Promise<Message[]> {
+export async function getSessionHistory(sessionId: string): Promise<{ messages: Message[]; artifacts: Artifact[] }> {
   const response = await fetch(
     `${BACKEND_URL}/chat/${encodeURIComponent(sessionId)}/history`,
     {
@@ -131,17 +126,17 @@ export async function getSessionHistory(sessionId: string): Promise<Message[]> {
 
   const data = await response.json();
   
-  // The backend now sends role: "user" | "assistant" and toolCalls directly
-  return (data.messages || []).map((m: any) => ({
+  const messages: Message[] = (data.messages || []).map((m: any) => ({
     id: m.id || `msg-${Math.random()}`,
     role: m.role,
     content: m.content || "",
     timestamp: m.timestamp ? new Date(m.timestamp) : new Date(),
-    toolCalls: (m.toolCalls || []).map((tc: any) => ({
-      id: tc.id || `tool-${Math.random()}`,
-      name: tc.name || "",
-      args: tc.args || {}
-    })),
-    toolResults: m.toolResults || []
   }));
+
+  // artifacts from backend are URL strings, convert to Artifact objects
+  const artifacts: Artifact[] = (data.artifacts || []).map((url: string) => ({
+    url: typeof url === "string" ? url : (url as any).url || "",
+  }));
+
+  return { messages, artifacts };
 }

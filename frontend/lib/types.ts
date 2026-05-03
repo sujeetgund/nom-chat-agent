@@ -1,17 +1,13 @@
+export interface Artifact {
+  url: string; // e.g. "/artifacts/PRD_2026-05-03_project-name.md"
+}
+
 export interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
   timestamp: Date;
-  toolCalls?: Array<{
-    id: string;
-    name: string;
-    args: Record<string, unknown>;
-  }>;
-  toolResults?: Array<{
-    toolCallId: string;
-    result: unknown;
-  }>;
+  artifacts?: Artifact[];
 }
 
 export interface ChatSession {
