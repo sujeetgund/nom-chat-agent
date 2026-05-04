@@ -4,6 +4,8 @@ Graph factory for the LangGraph nodes used in the CLI chat loop.
 
 from __future__ import annotations
 
+import logging
+
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, StateGraph
 
@@ -48,9 +50,11 @@ def _make_checkpointer():
             "langgraph-checkpoint-postgres and psycopg-pool are required for graph checkpointing."
         ) from exc
 
+    logger = logging.getLogger(__name__)
+
     connection_kwargs = {
         "autocommit": True,
-        "prepare_threshold": 0,
+        "prepare_threshold": None,
         "row_factory": dict_row,
     }
 
@@ -59,10 +63,30 @@ def _make_checkpointer():
         kwargs=connection_kwargs,
         min_size=1,
         max_size=10,
-        open=True,
+        open=False,  # Don't block startup; open lazily
     )
+    # Open the pool with a generous timeout so Cloud Run startup isn't blocked
+    try:
+        pool.open(wait=True, timeout=30.0)
+    except Exception as exc:
+        logger.error("Failed to open DB connection pool: %s", exc)
+        raise
+
     checkpointer = PostgresSaver(pool)
-    checkpointer.setup()
+    try:
+        checkpointer.setup()
+    except Exception as setup_exc:
+        # On Cloud Run, pooled connections may carry stale prepared-statement
+        # caches, causing DuplicatePreparedStatement on the first migration
+        # query.  Since setup() is idempotent we can safely ignore this.
+        import psycopg.errors
+
+        if isinstance(setup_exc, psycopg.errors.DuplicatePreparedStatement):
+            logger.warning(
+                "Ignoring DuplicatePreparedStatement during setup (tables likely already exist)."
+            )
+        else:
+            raise
     return checkpointer
 
 

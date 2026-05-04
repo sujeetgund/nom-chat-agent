@@ -23,7 +23,7 @@ RUN uv sync --frozen --no-dev --python /usr/local/bin/python3.13
 FROM python:3.13-slim-bookworm AS runtime
 
 RUN apt-get update \
-	&& apt-get install -y --no-install-recommends libpq5 \
+	&& apt-get install -y --no-install-recommends libpq5 ca-certificates \
 	&& rm -rf /var/lib/apt/lists/*
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

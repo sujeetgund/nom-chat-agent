@@ -27,8 +27,15 @@ ARTIFACTS_DIR = Path(__file__).resolve().parent / "artifacts"
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator:
-    # Build graph once at startup. The factory handles the checkpointer.
-    app.state.graph = build_graph()
+    # Try to build graph at startup, but don't block the server from binding to PORT.
+    # Cloud Run kills the container if it doesn't listen on PORT within the timeout.
+    try:
+        logger.info("Building LangGraph agent...")
+        app.state.graph = build_graph()
+        logger.info("LangGraph agent ready.")
+    except Exception as exc:
+        logger.error("Failed to build graph at startup: %s", exc, exc_info=True)
+        app.state.graph = None  # Will be retried on first request
     yield
     logger.info("Shutting down NOM Chat API.")
 
@@ -80,9 +87,17 @@ def serialize_message(message: Any) -> dict[str, Any]:
     return res
 
 
+def _get_graph(app):
+    """Return the compiled graph, building it lazily if startup init failed."""
+    if app.state.graph is None:
+        logger.info("Graph not initialized; retrying build_graph()...")
+        app.state.graph = build_graph()
+    return app.state.graph
+
+
 @app.post("/chat/{session_id}")
 async def chat_endpoint(session_id: str, payload: ChatRequest, request: Request):
-    graph = request.app.state.graph
+    graph = _get_graph(request.app)
     config = {"configurable": {"thread_id": session_id}}
     
     turn_input = {
@@ -171,7 +186,7 @@ async def chat_endpoint(session_id: str, payload: ChatRequest, request: Request)
 
 @app.get("/chat/{session_id}/history")
 async def chat_history(session_id: str, request: Request):
-    graph = request.app.state.graph
+    graph = _get_graph(request.app)
     config = {"configurable": {"thread_id": session_id}}
     
     try:

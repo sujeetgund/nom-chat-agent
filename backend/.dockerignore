@@ -31,6 +31,3 @@ env.yaml
 env.yml
 *.egg-info
 *.egg
-artifacts
-docs
-kb
