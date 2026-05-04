@@ -12,35 +12,43 @@ export function MarkdownContent({ content }: MarkdownContentProps) {
   return (
     <ReactMarkdown
       components={{
+        // In react-markdown v9, code blocks are rendered as <pre><code>...</code></pre>.
+        // Override `pre` to render code blocks via CodeBlock, and `code` for inline code only.
+        pre: ({ children, ...props }: { children?: ReactNode; [key: string]: any }) => {
+          // Extract the <code> child element's props
+          const codeChild = Array.isArray(children) ? children[0] : children;
+          if (
+            codeChild &&
+            typeof codeChild === "object" &&
+            "props" in codeChild
+          ) {
+            const { className, children: codeChildren } = codeChild.props;
+            const match = /language-(\w+)/.exec(className || "");
+            const language = match ? match[1] : "plain";
+            const code = String(codeChildren).replace(/\n$/, "");
+            return <CodeBlock language={language} code={code} />;
+          }
+          // Fallback: render as-is
+          return <pre {...props}>{children}</pre>;
+        },
         code: ({
-          node,
-          inline,
           className,
           children,
           ...props
         }: {
-          node?: any;
-          inline?: boolean;
           className?: string;
           children?: ReactNode;
           [key: string]: any;
         }) => {
-          const match = /language-(\w+)/.exec(className || "");
-          const language = match ? match[1] : "plain";
-          const code = String(children).replace(/\n$/, "");
-
-          if (inline) {
-            return (
-              <code
-                className="bg-slate-200 dark:bg-slate-800 px-2 py-1 rounded text-sm font-mono"
-                {...props}
-              >
-                {code}
-              </code>
-            );
-          }
-
-          return <CodeBlock language={language} code={code} />;
+          // This handler only runs for inline code (not inside <pre>).
+          return (
+            <code
+              className="bg-surface-soft text-body-strong border border-hairline-soft px-1.5 py-0.5 rounded-md text-[0.875em] font-mono"
+              {...props}
+            >
+              {children}
+            </code>
+          );
         },
         p: ({ children }: { children?: ReactNode }) => (
           <p className="mb-3 leading-relaxed">{children}</p>
