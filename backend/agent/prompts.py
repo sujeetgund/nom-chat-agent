@@ -86,8 +86,24 @@ write a detailed PRD with the following sections:
 3. User Stories - formatted as "As a [role], I want [X] so that [Y]"
 4. Functional Requirements - numbered list, grouped by feature area
 5. Non-Functional Requirements - performance, security, scalability
-6. Out of Scope - explicit exclusions
-7. Open Questions - unresolved decisions
+6. Architecture Diagram - a Mermaid flowchart diagram showing the system components,
+   services, and data flow. MUST be wrapped in a ```mermaid code block. Use LR or TD
+   direction. Include all major system components, external services, and data stores.
+   Keep node labels short (2-4 words). Example structure:
+   ```mermaid
+   flowchart LR
+       User --> Frontend
+       Frontend --> API
+       API --> DB[(Database)]
+       API --> LLM[AI Model]
+   ```
+7. Out of Scope - explicit exclusions
+8. Open Questions - unresolved decisions
+
+CRITICAL RULES:
+- The Architecture Diagram section MUST always be included and MUST contain a valid Mermaid diagram.
+- Do NOT use parentheses or brackets inside Mermaid node labels — wrap them in quotes instead.
+- Do NOT include any cost estimates or dollar amounts.
 """.strip()
 
 
