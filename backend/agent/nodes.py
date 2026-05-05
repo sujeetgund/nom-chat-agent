@@ -23,12 +23,14 @@ from .tools.common import get_chat_model
 from .tools.prd import generate_prd, generate_proposal
 from .tools.rag import rag_search
 from .tools.web_search import web_search
+from .tools.company_info import fetch_company_info
 
 TOOL_MAP = {
     "rag_search": rag_search,
     "web_search": web_search,
     "generate_proposal": generate_proposal,
     "generate_prd": generate_prd,
+    "fetch_company_info": fetch_company_info,
 }
 
 TOOL_STATUS_MAP = {
@@ -36,6 +38,7 @@ TOOL_STATUS_MAP = {
     "web_search": "researching",
     "generate_proposal": "writing_proposal",
     "generate_prd": "writing_prd",
+    "fetch_company_info": "fetching_company_info",
 }
 
 # Tools that produce artifacts (return JSON with artifact_url)
