@@ -5,6 +5,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from pydantic import BaseModel, Field
@@ -24,6 +25,8 @@ from .tools.prd import generate_prd, generate_proposal
 from .tools.rag import rag_search
 from .tools.web_search import web_search
 from .tools.company_info import fetch_company_info
+
+logger = logging.getLogger(__name__)
 
 TOOL_MAP = {
     "rag_search": rag_search,
@@ -149,9 +152,18 @@ def tools_node(state: AgentState) -> dict[str, Any]:
             )
             continue
 
+        logger.info(f"Tool Call: {tool_name} with args: {tool_args}")
         try:
             result = tool_fn.invoke(tool_args)
+            
+            # Truncate result for logging if it's a long string
+            log_result = result
+            if isinstance(result, str) and len(result) > 500:
+                log_result = result[:500] + "... [truncated]"
+            
+            logger.info(f"Tool Response: {tool_name} result: {log_result}")
         except Exception as exc:  # pragma: no cover
+            logger.error(f"Tool Error: {tool_name} error: {exc}", exc_info=True)
             result = f"Tool error: {exc}"
 
         # For artifact tools: parse the JSON, extract URL, pass clean message to agent
