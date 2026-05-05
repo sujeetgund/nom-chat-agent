@@ -9,7 +9,7 @@ from typing import Any
 
 import psycopg
 from langchain_core.tools import tool
-from langchain_huggingface import HuggingFaceEmbeddings, HuggingFaceEndpointEmbeddings
+from langchain_openai import OpenAIEmbeddings
 
 from config import get_settings, AVAILABLE_SOURCE_TYPES
 import json
@@ -23,12 +23,13 @@ class SearchHit:
     retrieval_time_ms: float
 
 
-def _get_embeddings_model() -> HuggingFaceEmbeddings:
+def _get_embeddings_model() -> OpenAIEmbeddings:
     """Get the embeddings model."""
     settings = get_settings()
-    return HuggingFaceEndpointEmbeddings(
-        model=settings.hf_embedding_model,
-        huggingfacehub_api_token=settings.hf_api_token,
+    return OpenAIEmbeddings(
+        model=settings.openai_embedding_model,
+        api_key=settings.openai_api_key,
+        dimensions=512,
     )
 
 

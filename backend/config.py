@@ -26,6 +26,13 @@ class Settings(BaseSettings):
     openai_api_key_suffix: str = Field(
         default="", validation_alias="OPENAI_API_KEY_SUFFIX"
     )
+    openai_embedding_model: str = Field(
+        default="text-embedding-3-small", validation_alias="OPENAI_EMBEDDING_MODEL"
+    )
+
+    # GitHub & Sync
+    sync_secret_token: str = Field(default="", validation_alias="SYNC_SECRET_TOKEN")
+    github_token: str = Field(default="", validation_alias="GITHUB_TOKEN")
 
     # HuggingFace
     hf_embedding_model: str = Field(
@@ -56,4 +63,4 @@ def get_settings() -> Settings:
 
 
 # Available source types in the knowledge base
-AVAILABLE_SOURCE_TYPES = ["service", "case_study", "blog", "company"]
+AVAILABLE_SOURCE_TYPES = ["case_study", "blog"]

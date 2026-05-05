@@ -7,13 +7,14 @@ import queue as queue_mod
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import FastAPI, Request
+from fastapi import FastAPI, Request, Header, HTTPException
 from fastapi.responses import StreamingResponse, PlainTextResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from langchain_core.messages import HumanMessage, AIMessage, ToolMessage
 
 from agent.graph import build_graph
+from agent.services.ingestion import ContentIngestor
 from config import get_settings
 
 logger = logging.getLogger(__name__)
@@ -36,6 +37,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator:
     except Exception as exc:
         logger.error("Failed to build graph at startup: %s", exc, exc_info=True)
         app.state.graph = None  # Will be retried on first request
+
+    # Trigger content sync from GitHub on startup
+    try:
+        ingestor = ContentIngestor()
+        asyncio.create_task(ingestor.sync_content())
+        logger.info("Content sync task scheduled.")
+    except Exception as sync_exc:
+        logger.error("Failed to schedule startup sync: %s", sync_exc)
+
     yield
     logger.info("Shutting down NOM Chat API.")
 
@@ -234,3 +244,20 @@ async def get_artifact(filename: str):
     
     content = filepath.read_text(encoding="utf-8")
     return PlainTextResponse(content, media_type="text/markdown; charset=utf-8")
+
+
+@app.post("/api/v1/content/sync")
+async def sync_content_webhook(x_sync_token: str = Header(None)):
+    """Webhook for triggering content sync from GitHub."""
+    if not settings.sync_secret_token:
+        logger.warning("Sync triggered but SYNC_SECRET_TOKEN is not set.")
+        raise HTTPException(status_code=500, detail="Sync not configured")
+        
+    if x_sync_token != settings.sync_secret_token:
+        logger.warning(f"Invalid sync token provided: {x_sync_token}")
+        raise HTTPException(status_code=401, detail="Invalid sync token")
+    
+    ingestor = ContentIngestor()
+    # Run in background
+    asyncio.create_task(ingestor.sync_content(force=True))
+    return {"message": "Sync triggered"}
