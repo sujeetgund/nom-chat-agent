@@ -19,7 +19,6 @@ node_modules
 .DS_Store
 docs/
 scripts/
-kb/
 artifacts/
 guide.md
 main.py

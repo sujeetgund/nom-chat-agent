@@ -36,6 +36,8 @@ WORKDIR /app
 COPY --from=builder /app/.venv /app/.venv
 COPY api.py config.py ./
 COPY agent ./agent/
+COPY kb ./kb/
+RUN mkdir -p artifacts
 
 EXPOSE 8080
 
